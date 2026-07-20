@@ -20,81 +20,147 @@
         <div class="status-note" id="currentServingNote" style="margin-top:6px;"></div>
       </div>
 
-      <div id="loudspeaker" style="display:none; font-size:48px; margin-top:8px;">📢</div>
+      <div id="clock" class="status-icon">🕒</div>
+      <div id="loudspeaker" class="status-icon">📢</div>
+      <div id="checkmark" class="status-icon">✅</div>
+      <div id="dismissedIcon" class="status-icon">❌</div>
+
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../shared/supabase.js"></script>
+
   <script>
     const params = new URLSearchParams(window.location.search);
     const tokenId = params.get('id');
-    document.getElementById('deptName').textContent = (params.get('dept') || '') + ' token';
+
+    document.getElementById('deptName').textContent =
+      (params.get('dept') || '') + ' token';
 
     function render(token) {
+
       document.getElementById('tokenNumber').textContent = token.number;
+
       const box = document.getElementById('statusBox');
       const label = document.getElementById('statusLabel');
       const note = document.getElementById('statusNote');
+
+      const clock = document.getElementById('clock');
       const speaker = document.getElementById('loudspeaker');
+      const checkmark = document.getElementById('checkmark');
+      const dismissedIcon = document.getElementById('dismissedIcon');
+
       box.className = 'status-box ' + token.status;
+
+      // Hide all icons
+      clock.style.display = 'none';
       speaker.style.display = 'none';
+      checkmark.style.display = 'none';
+      dismissedIcon.style.display = 'none';
 
       if (token.status === 'pending') {
+
         label.textContent = 'Your token number is';
         note.textContent = 'Please wait for your token to be called';
+        clock.style.display = 'block';
+
       } else if (token.status === 'calling') {
+
         label.textContent = 'Your token number is';
         note.textContent = 'Your token is being called';
         speaker.style.display = 'block';
+
       } else if (token.status === 'processed') {
-        label.textContent = 'Your token has been resolved';
-        note.textContent = 'You may close the application';
+
+        label.textContent = 'Your token has been processed';
+        note.textContent = 'You may now close the application';
+        checkmark.style.display = 'block';
+
       } else if (token.status === 'dismissed') {
-        label.textContent = 'Your token number has been dismissed';
+
+        label.textContent = 'Your token has been dismissed';
         note.textContent = 'You did not respond to your token call. Please take another token.';
+        dismissedIcon.style.display = 'block';
+
       }
+
     }
 
     async function loadCurrentServing(deptId) {
-      const { data } = await supabaseClient.from('tokens').select('*').eq('department_id', deptId).eq('status', 'calling').limit(1);
+
+      const { data } = await supabaseClient
+        .from('tokens')
+        .select('*')
+        .eq('department_id', deptId)
+        .eq('status', 'calling')
+        .limit(1);
+
       const note = document.getElementById('currentServingNote');
-    if (data && data.length && data[0].id != tokenId) {
+
+      if (data && data.length && data[0].id != tokenId) {
         note.textContent = `Current token No: ${data[0].number}`;
       } else {
         note.textContent = '';
       }
     }
 
-   let currentDeptId = null;
+    let currentDeptId = null;
 
-async function loadToken() {
-      const { data, error } = await supabaseClient.from('tokens').select('*').eq('id', tokenId).single();
-      if (error) { console.error(error); return; }
+    async function loadToken() {
+
+      const { data, error } = await supabaseClient
+        .from('tokens')
+        .select('*')
+        .eq('id', tokenId)
+        .single();
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
       render(data);
       currentDeptId = data.department_id;
       loadCurrentServing(currentDeptId);
     }
-supabaseClient
-  .channel('token-' + tokenId)
-  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tokens', filter: `id=eq.${tokenId}` },
-    (payload) => render(payload.new)
-  )
-  .subscribe();
 
-supabaseClient
-  .channel('dept-calling-updates')
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' },
-    (payload) => {
-      if (currentDeptId && payload.new && payload.new.department_id === currentDeptId) {
-        loadCurrentServing(currentDeptId);
-      }
-    }
-  )
-  .subscribe();
+    supabaseClient
+      .channel('token-' + tokenId)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tokens',
+          filter: `id=eq.${tokenId}`
+        },
+        (payload) => render(payload.new)
+      )
+      .subscribe();
 
-loadToken(); 
+    supabaseClient
+      .channel('dept-calling-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tokens'
+        },
+        (payload) => {
+          if (
+            currentDeptId &&
+            payload.new &&
+            payload.new.department_id === currentDeptId
+          ) {
+            loadCurrentServing(currentDeptId);
+          }
+        }
+      )
+      .subscribe();
 
+    loadToken();
 
   </script>
 </body>

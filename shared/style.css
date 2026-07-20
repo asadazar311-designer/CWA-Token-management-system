@@ -232,3 +232,39 @@ td:nth-child(1), th:nth-child(1) { white-space: normal; } /* Token# can wrap if 
 
 
 
+
+
+.status-icon {
+    display: none;
+    font-size: 60px;
+    margin-top: 15px;
+    text-align: center;
+    animation: popIn .3s ease;
+}
+
+#clock {
+    color: #3b82f6;
+}
+
+#loudspeaker {
+    color: #f59e0b;
+}
+
+#checkmark {
+    color: #22c55e;
+}
+
+#dismissedIcon {
+    color: #ef4444;
+}
+
+@keyframes popIn {
+    from {
+        transform: scale(.5);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
