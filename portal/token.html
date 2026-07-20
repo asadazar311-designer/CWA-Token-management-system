@@ -70,20 +70,23 @@
         navigator.vibrate([200, 100, 200]);
       }
 
-      try {
+ try {
         const oscillator = sharedAudioCtx.createOscillator();
         const gainNode = sharedAudioCtx.createGain();
         oscillator.connect(gainNode);
         gainNode.connect(sharedAudioCtx.destination);
-        oscillator.frequency.value = 880;
-        gainNode.gain.setValueAtTime(0.3, sharedAudioCtx.currentTime);
+        oscillator.frequency.value = 553;
+        gainNode.gain.setValueAtTime(0.15, sharedAudioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, sharedAudioCtx.currentTime + 0.3);
         oscillator.start();
-        oscillator.stop(sharedAudioCtx.currentTime + 0.4);
+        oscillator.stop(sharedAudioCtx.currentTime + 0.3);
       } catch (e) {
         console.log('Audio not available:', e);
       }
     }
 
+
+    
     function render(token) {
 
       document.getElementById('tokenNumber').textContent = token.number;
