@@ -38,6 +38,31 @@
     document.getElementById('deptName').textContent =
       (params.get('dept') || '') + ' token';
 
+    let hasNotified = false;
+
+    function notifyCalled() {
+      if (hasNotified) return;
+      hasNotified = true;
+
+      if (navigator.vibrate) {
+        navigator.vibrate([200, 100, 200]);
+      }
+
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.frequency.value = 880;
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.4);
+      } catch (e) {
+        console.log('Audio not available:', e);
+      }
+    }
+
     function render(token) {
 
       document.getElementById('tokenNumber').textContent = token.number;
@@ -53,7 +78,6 @@
 
       box.className = 'status-box ' + token.status;
 
-      // Hide all icons
       clock.style.display = 'none';
       speaker.style.display = 'none';
       checkmark.style.display = 'none';
@@ -70,6 +94,7 @@
         label.textContent = 'Your token number is';
         note.textContent = 'Your token is being called';
         speaker.style.display = 'block';
+        notifyCalled();
 
       } else if (token.status === 'processed') {
 
