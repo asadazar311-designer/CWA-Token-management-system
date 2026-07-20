@@ -75,11 +75,11 @@
         const gainNode = sharedAudioCtx.createGain();
         oscillator.connect(gainNode);
         gainNode.connect(sharedAudioCtx.destination);
-        oscillator.frequency.value = 553;
-        gainNode.gain.setValueAtTime(0.15, sharedAudioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, sharedAudioCtx.currentTime + 0.3);
+        oscillator.frequency.value = 758;// Frequency in Hz
+        gainNode.gain.setValueAtTime(0.15, sharedAudioCtx.currentTime);// Set initial volume
+        gainNode.gain.exponentialRampToValueAtTime(0.001, sharedAudioCtx.currentTime + 0.6);// Fade out over 0.3 seconds
         oscillator.start();
-        oscillator.stop(sharedAudioCtx.currentTime + 0.6);
+        oscillator.stop(sharedAudioCtx.currentTime + 0.6);// Stop after 0.6 seconds
       } catch (e) {
         console.log('Audio not available:', e);
       }
