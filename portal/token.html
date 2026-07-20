@@ -25,6 +25,8 @@
       <div id="checkmark" class="status-icon">✅</div>
       <div id="dismissedIcon" class="status-icon">❌</div>
 
+      <button id="enableAlertsBtn" onclick="enableAlerts()" class="btn btn-blue" style="margin-top:16px;">🔔 Enable Sound Alerts</button>
+
     </div>
   </div>
 
@@ -39,9 +41,29 @@
       (params.get('dept') || '') + ' token';
 
     let hasNotified = false;
+    let alertsEnabled = false;
+    let sharedAudioCtx = null;
+
+    function enableAlerts() {
+      alertsEnabled = true;
+      sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+      const osc = sharedAudioCtx.createOscillator();
+      const gain = sharedAudioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(sharedAudioCtx.destination);
+      gain.gain.setValueAtTime(0.01, sharedAudioCtx.currentTime);
+      osc.start();
+      osc.stop(sharedAudioCtx.currentTime + 0.05);
+
+      if (navigator.vibrate) navigator.vibrate(50);
+
+      document.getElementById('enableAlertsBtn').textContent = '🔔 Alerts Enabled';
+      document.getElementById('enableAlertsBtn').disabled = true;
+    }
 
     function notifyCalled() {
-      if (hasNotified) return;
+      if (hasNotified || !alertsEnabled) return;
       hasNotified = true;
 
       if (navigator.vibrate) {
@@ -49,15 +71,14 @@
       }
 
       try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioCtx.createOscillator();
-        const gainNode = audioCtx.createGain();
+        const oscillator = sharedAudioCtx.createOscillator();
+        const gainNode = sharedAudioCtx.createGain();
         oscillator.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
+        gainNode.connect(sharedAudioCtx.destination);
         oscillator.frequency.value = 880;
-        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.3, sharedAudioCtx.currentTime);
         oscillator.start();
-        oscillator.stop(audioCtx.currentTime + 0.4);
+        oscillator.stop(sharedAudioCtx.currentTime + 0.4);
       } catch (e) {
         console.log('Audio not available:', e);
       }
