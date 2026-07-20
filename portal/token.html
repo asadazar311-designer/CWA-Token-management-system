@@ -79,14 +79,14 @@
         gainNode.gain.setValueAtTime(0.15, sharedAudioCtx.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.001, sharedAudioCtx.currentTime + 0.3);
         oscillator.start();
-        oscillator.stop(sharedAudioCtx.currentTime + 0.3);
+        oscillator.stop(sharedAudioCtx.currentTime + 0.6);
       } catch (e) {
         console.log('Audio not available:', e);
       }
     }
 
 
-    
+
     function render(token) {
 
       document.getElementById('tokenNumber').textContent = token.number;
