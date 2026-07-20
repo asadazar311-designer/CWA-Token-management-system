@@ -68,7 +68,7 @@ body { overflow: auto; }
     (departments || []).forEach(d => deptMap[d.id] = d);
 
     const { data: calling } = await supabaseClient.from('tokens').select('*').eq('status', 'calling').order('called_at', { ascending: false }).limit(1);
-    const { data: pending } = await supabaseClient.from('tokens').select('*').eq('status', 'pending').order('id').limit(4);
+    const { data: pending } = await supabaseClient.from('tokens').select('*').eq('status', 'pending').order('priority_order', { ascending: true }).order('id', { ascending: true }).limit(4);
 
     const t = text[lang];
     document.getElementById('layout').setAttribute('dir', t.dir);

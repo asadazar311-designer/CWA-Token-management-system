@@ -46,12 +46,16 @@ btn.innerHTML = `<div class="name">${dept.name}</div><div class="desc">${descrip
       });
     }
 
-    async function createToken(dept) {
-      // Get count of tokens today for this department to generate number
+   async function createToken(dept) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
       const { count } = await supabaseClient
         .from('tokens')
         .select('*', { count: 'exact', head: true })
-        .eq('department_id', dept.id);
+        .eq('department_id', dept.id)
+        .gte('created_at', todayStart.toISOString());
+        
 
       const num = (count || 0) + 1;
       const tokenNumber = `${dept.prefix}-${String(num).padStart(3, '0')}`;

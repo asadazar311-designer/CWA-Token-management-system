@@ -124,8 +124,8 @@
       return new Date(t.resolved_at).getTime() >= mostRecentCallTime;
     });
 
-    const visibleRows = [...pending, ...calling, ...visibleProcessed, ...dismissed];
-    visibleRows.sort((a, b) => a.id - b.id);
+const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
+
 
     const tbody = document.getElementById('queueBody');
     tbody.innerHTML = '';
@@ -197,7 +197,11 @@
     return '';
   }
 
-  async function movePriority(id, direction) {
+ 
+
+
+
+async function movePriority(id, direction) {
     const { data: pendingTokens } = await supabaseClient
       .from('tokens')
       .select('*')
@@ -209,14 +213,31 @@
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
     if (swapIndex < 0 || swapIndex >= pendingTokens.length) return;
 
-    const current = pendingTokens[index];
-    const swapWith = pendingTokens[swapIndex];
+    [pendingTokens[index], pendingTokens[swapIndex]] = [pendingTokens[swapIndex], pendingTokens[index]];
 
-    await supabaseClient.from('tokens').update({ priority_order: swapWith.priority_order ?? swapIndex }).eq('id', current.id);
-    await supabaseClient.from('tokens').update({ priority_order: current.priority_order ?? index }).eq('id', swapWith.id);
+    for (let i = 0; i < pendingTokens.length; i++) {
+      await supabaseClient.from('tokens').update({ priority_order: i }).eq('id', pendingTokens[i].id);
+    }
 
-    loadDashboard();
+    async function clearStaleTokens() {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  await supabaseClient
+    .from('tokens')
+    .update({ status: 'dismissed', previous_status: 'pending', resolved_at: new Date().toISOString() })
+    .in('status', ['pending', 'calling'])
+    .lt('created_at', todayStart.toISOString());
+}
+
+clearStaleTokens().then(loadDashboard);
+
   }
+
+
+
+
+
 
   async function callNext() {
     const { data: allT } = await supabaseClient.from('tokens').select('*').eq('archived', false);
