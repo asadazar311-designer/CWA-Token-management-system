@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Waiting Display</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+ 
+body { overflow: auto; }
+
+  [dir="rtl"] { font-family: 'Noto Nastaliq Urdu', 'Segoe UI', sans-serif; }
+</style>
+</head>
+<body>
+<div class="display-layout" id="layout">
+  <div class="next-list">
+    <h2 id="nextTitle">Tokens next in line</h2>
+    <div id="nextItems"></div>
+  </div>
+  <div class="current-panel" id="currentPanel">
+    <img class="logo" src="../shared/logo.jpg">
+    <div class="title" id="orgTitle"><span class="green">Pakistan</span> Embassy</div>
+    <div class="big-box">
+      <div id="currentLabel">Current token being called</div>
+      <div class="big-num" id="currentNum">-</div>
+      <div id="counterLabel" style="font-size:20px;margin-top:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/supabase.js"></script>
+<script>
+  const text = {
+    en: {
+      dir: 'ltr',
+      nextTitle: 'Tokens next in line',
+      currentLabel: 'Current token being called',
+      next: 'Next',
+      orgTitleGreen: 'Pakistan',
+      orgTitleRest: 'Embassy',
+      proceed: (desk) => `Proceed to ${desk} Desk`
+    },
+    ur: {
+      dir: 'rtl',
+      nextTitle: 'اگلے نمبر پر آنے والے ٹوکنز',
+      currentLabel: 'موجودہ ٹوکن جسے بلایا جا رہا ہے',
+      next: 'اگلا',
+      orgTitleGreen: 'پاکستانی',
+      orgTitleRest: 'سفارت خانہ',
+      proceed: (desk) => `براہ کرم ${desk} پر جائیں`
+    }
+  };
+
+  const deskNames = {
+    'NADRA': { en: 'NADRA', ur: 'نادرا ڈیسک' },
+    'Passport Section': { en: 'Passport', ur: 'پاسپورٹ ڈیسک' },
+    'Welfare Wing': { en: 'Welfare', ur: 'ویلفیئر ڈیسک' },
+    'Nurses': { en: 'Nurses', ur: 'نرسز ڈیسک' },
+    'Special Visit / Other': { en: 'Meeting Room', ur: 'میٹنگ روم' }
+  };
+
+  let lang = 'en';
+
+  async function loadDisplay() {
+    const { data: departments } = await supabaseClient.from('departments').select('*');
+    const deptMap = {};
+    (departments || []).forEach(d => deptMap[d.id] = d);
+
+    const { data: calling } = await supabaseClient.from('tokens').select('*').eq('status', 'calling').order('called_at', { ascending: false }).limit(1);
+    const { data: pending } = await supabaseClient.from('tokens').select('*').eq('status', 'pending').order('id').limit(4);
+
+    const t = text[lang];
+    document.getElementById('layout').setAttribute('dir', t.dir);
+    document.getElementById('nextTitle').textContent = t.nextTitle;
+    document.getElementById('currentLabel').textContent = t.currentLabel;
+    document.getElementById('orgTitle').innerHTML = `<span class="green">${t.orgTitleGreen}</span> ${t.orgTitleRest}`;
+
+    document.getElementById('currentNum').textContent = calling && calling.length ? calling[0].number : '-';
+    const dept = calling && calling.length ? deptMap[calling[0].department_id] : null;
+
+    if (dept) {
+      const deskInfo = deskNames[dept.name] || { en: dept.name, ur: dept.name };
+      const deskLabel = lang === 'en' ? deskInfo.en : deskInfo.ur;
+      document.getElementById('counterLabel').textContent = lang === 'en'
+        ? `Proceed to ${deskLabel} Desk`
+        : t.proceed(deskLabel);
+    } else {
+      document.getElementById('counterLabel').textContent = '';
+    }
+
+    const nextContainer = document.getElementById('nextItems');
+    nextContainer.innerHTML = '';
+    (pending || []).forEach((p, i) => {
+      const div = document.createElement('div');
+      div.className = 'next-item';
+
+div.innerHTML = `<span>${p.number}</span>${i === 0 ? `<span style="font-size:clamp(16px, 2.5vw, 28px);">${t.next}</span>` : ''}`;
+
+      nextContainer.appendChild(div);
+    });
+  }
+
+  setInterval(() => {
+    lang = lang === 'en' ? 'ur' : 'en';
+    loadDisplay();
+  }, 8000);
+
+  supabaseClient
+    .channel('display-tokens')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' }, loadDisplay)
+    .subscribe();
+
+  loadDisplay();
+</script>
+</body>
+</html>

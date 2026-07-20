@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pakistan Embassy Kuwait - Token Portal</title>
+<link rel="stylesheet" href="shared/style.css">
+</head>
+<body>
+  <div class="dark-bg">
+    <div class="card">
+      <img class="logo" src="shared/logo.jpg" alt="logo">
+      <div class="title"><span class="green">Pakistan</span> Embassy Kuwait</div>
+      <p class="subtitle">Scan QR code below to receive token number</p>
+      <div id="qr" style="display:flex;justify-content:center;margin-top:12px;"></div>
+    </div>
+  </div>
+
+ <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <script>
+    // This should match the Portal URL set in Admin Settings
+    const portalUrl = window.location.origin + "/portal/";
+    QRCode.toCanvas(document.createElement('canvas'), portalUrl, (err, canvas) => {
+      document.getElementById('qr').appendChild(canvas);
+    });
+  </script>
+</body>
+</html>

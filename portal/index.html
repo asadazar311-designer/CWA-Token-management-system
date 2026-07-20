@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Token Portal</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+  <div class="dark-bg">
+    <div class="card">
+      <img class="logo" src="../shared/logo.jpg" alt="logo">
+      <div class="title"><span class="green">Pakistan</span> Embassy Kuwait</div>
+      <p class="subtitle">Choose which department you wish to visit</p>
+      <div id="departments"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../shared/supabase.js"></script>
+  <script>
+    async function loadDepartments() {
+      const { data, error } = await supabaseClient.from('departments').select('*').order('id');
+      if (error) { console.error(error); return; }
+      const container = document.getElementById('departments');
+      data.forEach(dept => {
+        const btn = document.createElement('button');
+        btn.className = 'dept-btn';
+
+        
+
+const descriptions = {
+  'NADRA': 'For requests regarding ID Card / Information Inquiry',
+  'Passport Section': 'For Passport related issues or passport collection',
+  'Consular section': 'For Attestation, Power of attorney, Affidavits and Visa',
+  'Welfare Wing': 'For OPF Card, Death cases, Out pass, Nurse Requests, Complain Application to Pakistan etc.',
+  'Special Visit / Other': 'In case you have an appointment with Head of CWA'
+};
+
+
+
+btn.innerHTML = `<div class="name">${dept.name}</div><div class="desc">${descriptions[dept.name] || ''}</div>`;
+
+        btn.onclick = () => createToken(dept);
+        container.appendChild(btn);
+      });
+    }
+
+    async function createToken(dept) {
+      // Get count of tokens today for this department to generate number
+      const { count } = await supabaseClient
+        .from('tokens')
+        .select('*', { count: 'exact', head: true })
+        .eq('department_id', dept.id);
+
+      const num = (count || 0) + 1;
+      const tokenNumber = `${dept.prefix}-${String(num).padStart(3, '0')}`;
+
+      const { data, error } = await supabaseClient
+        .from('tokens')
+        .insert({ number: tokenNumber, department_id: dept.id, status: 'pending' })
+        .select()
+        .single();
+
+      if (error) { alert('Could not create token. Try again.'); console.error(error); return; }
+
+      window.location.href = `token.html?id=${data.id}&dept=${encodeURIComponent(dept.name)}`;
+    }
+
+    loadDepartments();
+  </script>
+</body>
+</html>

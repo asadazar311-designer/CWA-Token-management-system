@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Token</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+  <div class="dark-bg">
+    <div class="card">
+      <img class="logo" src="../shared/logo.jpg" alt="logo">
+      <div class="title"><span class="green">Pakistan</span> Embassy Kuwait</div>
+      <p class="subtitle" id="deptName">Department token</p>
+
+      <div class="status-box" id="statusBox">
+        <div class="status-label" id="statusLabel">Loading...</div>
+        <div class="token-number" id="tokenNumber">-</div>
+        <div class="status-note" id="statusNote"></div>
+        <div class="status-note" id="currentServingNote" style="margin-top:6px;"></div>
+      </div>
+
+      <div id="loudspeaker" style="display:none; font-size:48px; margin-top:8px;">📢</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../shared/supabase.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const tokenId = params.get('id');
+    document.getElementById('deptName').textContent = (params.get('dept') || '') + ' token';
+
+    function render(token) {
+      document.getElementById('tokenNumber').textContent = token.number;
+      const box = document.getElementById('statusBox');
+      const label = document.getElementById('statusLabel');
+      const note = document.getElementById('statusNote');
+      const speaker = document.getElementById('loudspeaker');
+      box.className = 'status-box ' + token.status;
+      speaker.style.display = 'none';
+
+      if (token.status === 'pending') {
+        label.textContent = 'Your token number is';
+        note.textContent = 'Please wait for your token to be called';
+      } else if (token.status === 'calling') {
+        label.textContent = 'Your token number is';
+        note.textContent = 'Your token is being called';
+        speaker.style.display = 'block';
+      } else if (token.status === 'processed') {
+        label.textContent = 'Your token has been resolved';
+        note.textContent = 'You may close the application';
+      } else if (token.status === 'dismissed') {
+        label.textContent = 'Your token number has been dismissed';
+        note.textContent = 'You did not respond to your token call. Please take another token.';
+      }
+    }
+
+    async function loadCurrentServing(deptId) {
+      const { data } = await supabaseClient.from('tokens').select('*').eq('department_id', deptId).eq('status', 'calling').limit(1);
+      const note = document.getElementById('currentServingNote');
+    if (data && data.length && data[0].id != tokenId) {
+        note.textContent = `Current token No: ${data[0].number}`;
+      } else {
+        note.textContent = '';
+      }
+    }
+
+   let currentDeptId = null;
+
+async function loadToken() {
+      const { data, error } = await supabaseClient.from('tokens').select('*').eq('id', tokenId).single();
+      if (error) { console.error(error); return; }
+      render(data);
+      currentDeptId = data.department_id;
+      loadCurrentServing(currentDeptId);
+    }
+supabaseClient
+  .channel('token-' + tokenId)
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tokens', filter: `id=eq.${tokenId}` },
+    (payload) => render(payload.new)
+  )
+  .subscribe();
+
+supabaseClient
+  .channel('dept-calling-updates')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' },
+    (payload) => {
+      if (currentDeptId && payload.new && payload.new.department_id === currentDeptId) {
+        loadCurrentServing(currentDeptId);
+      }
+    }
+  )
+  .subscribe();
+
+loadToken(); 
+
+
+  </script>
+</body>
+</html>

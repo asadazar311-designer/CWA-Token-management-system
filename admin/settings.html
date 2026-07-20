@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<div class="admin-layout">
+  <div class="sidebar" id="sidebar">
+    <div class="brand">
+      <img src="../shared/logo.jpg">
+      <span>Embassy of Pakistan, Kuwait</span>
+    </div>
+    <div class="nav-group-label">Dashboard</div>
+    <a class="nav-link" href="dashboard.html"><span>Main-Dashboard</span></a>
+    <div class="nav-group-label">Statistics / Settings</div>
+    <a class="nav-link" href="statistics.html"><span>Statistics</span></a>
+    <a class="nav-link" href="settings.html"><span>Settings</span></a>
+  </div>
+
+  <div class="main">
+    <h1 class="page-title">Settings</h1>
+    <p class="page-subtitle">Manage or change the QR code / URL</p>
+
+    <div class="panel" style="max-width:420px;">
+      <h3>Queue Entry QR Code</h3>
+      <p class="sub">Print or display this QR code. Visitors scan it to get a token.</p>
+      <div id="qr" style="display:flex;justify-content:center;margin:16px 0;min-height:180px;align-items:center;"></div>
+      <input id="urlInput" type="text" readonly>
+      <button class="btn btn-green" onclick="changeUrl()">Change URL</button>
+      <button class="btn btn-blue" onclick="downloadPng()">Download PNG</button>
+      <button class="btn" style="background:#475467;color:#fff;" onclick="copyUrl()">Copy URL</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+<script src="../shared/supabase.js"></script>
+<script>
+  async function checkAuth() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) window.location.href = 'login.html';
+  }
+  checkAuth();
+
+  let currentUrl = '';
+
+  async function loadSettings() {
+    let { data } = await supabaseClient.from('settings').select('*').limit(1).maybeSingle();
+    if (!data) {
+      const insert = await supabaseClient.from('settings').insert({ portal_url: window.location.origin + '/portal/' }).select().single();
+      data = insert.data;
+    }
+    currentUrl = data.portal_url;
+    renderQr();
+  }
+
+  function renderQr() {
+    document.getElementById('urlInput').value = currentUrl;
+    const container = document.getElementById('qr');
+    container.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    QRCode.toCanvas(canvas, currentUrl, { width: 200 }, function (error) {
+      if (error) console.error('QR generation error:', error);
+    });
+    container.appendChild(canvas);
+  }
+
+  async function changeUrl() {
+    const newUrl = prompt('Enter new portal URL:', currentUrl);
+    if (!newUrl) return;
+    currentUrl = newUrl;
+    await supabaseClient.from('settings').update({ portal_url: newUrl, updated_at: new Date().toISOString() }).neq('id', 0);
+    renderQr();
+  }
+
+  function downloadPng() {
+    const canvas = document.querySelector('#qr canvas');
+    if (!canvas) { alert('QR code not ready yet, try again in a second.'); return; }
+    const link = document.createElement('a');
+    link.download = 'queue-qr.png';
+    link.href = canvas.toDataURL('image/png');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function copyUrl() {
+    navigator.clipboard.writeText(currentUrl).then(() => alert('URL copied!'));
+  }
+
+  loadSettings();
+</script>
+</body>
+</html>

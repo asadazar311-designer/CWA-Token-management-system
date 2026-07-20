@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Statistics</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<div class="admin-layout">
+  <div class="sidebar" id="sidebar">
+    <div class="brand">
+      <img src="../shared/logo.jpg">
+      <span>Embassy of Pakistan, Kuwait</span>
+    </div>
+    <div class="nav-group-label">Dashboard</div>
+    <a class="nav-link" href="dashboard.html"><span>Main-Dashboard</span></a>
+    <div class="nav-group-label">Statistics / Settings</div>
+    <a class="nav-link" href="statistics.html"><span>Statistics</span></a>
+    <a class="nav-link" href="settings.html"><span>Settings</span></a>
+  </div>
+
+  <div class="main">
+    <h1 class="page-title">Token management Portal</h1>
+    <p class="page-subtitle">Embassy of Pakistan, Kuwait</p>
+
+    <h3>Welfare Token statistics</h3>
+    <p class="sub">Number of tokens being generated, dismissed, resolved and the avg time it takes to do so</p>
+
+    <div class="stats-row">
+      <div class="stat-card"><div class="label">Total generated</div><div class="value" id="sTotal">-</div><div class="bar" style="background:#2f80ed"></div></div>
+      <div class="stat-card"><div class="label">Tokens Dismissed</div><div class="value" id="sDismissed">-</div><div class="bar" style="background:#eb5757"></div></div>
+      <div class="stat-card"><div class="label">Total Processed</div><div class="value" id="sProcessed">-</div><div class="bar" style="background:#27ae60"></div></div>
+      <div class="stat-card"><div class="label">Avg. Wait time</div><div class="value" id="sAvgWait">-</div><div class="bar" style="background:#f2994a"></div></div>
+      <div class="stat-card"><div class="label">Avg. Process time</div><div class="value" id="sAvgService">-</div><div class="bar" style="background:#27ae60"></div></div>
+    </div>
+
+    <h3 style="margin-bottom:2px;">Daily breakdown of Tokens</h3>
+    <p class="sub" id="rangeLabel">Last 7 Days - one day per row</p>
+
+    <div style="display:flex; gap:12px; margin-bottom:20px;">
+      <button class="range-btn active" data-days="7" onclick="setRange(7, this)">7 Days</button>
+      <button class="range-btn" data-days="14" onclick="setRange(14, this)">14 Days</button>
+      <button class="range-btn" data-days="30" onclick="setRange(30, this)">30 Days</button>
+      <button class="range-btn" data-days="90" onclick="setRange(90, this)">90 Days</button>
+    </div>
+
+    <div class="panel">
+      <table>
+        <thead><tr><th>Day / Date</th><th>Tokens Generated</th><th>Dismissed</th><th>Resolved</th><th>Avg Wait time</th><th>Avg Service time</th></tr></thead>
+        <tbody id="dailyBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<style>
+  .range-btn {
+    flex: 1; padding: 12px; border: 1.5px solid var(--border); background: #fff;
+    border-radius: 10px; font-weight: 700; cursor: pointer; color: #475467;
+  }
+  .range-btn.active { background: #2f80ed; color: #fff; border-color: #2f80ed; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/supabase.js"></script>
+<script>
+  async function checkAuth() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) window.location.href = 'login.html';
+  }
+  checkAuth();
+
+  let currentDays = 7;
+  let allTokens = [];
+
+  function waitTime(t) {
+    if (!t.called_at) return null;
+    return new Date(t.called_at) - new Date(t.created_at);
+  }
+  function serviceTime(t) {
+    if (!t.called_at || !t.resolved_at) return null;
+    return new Date(t.resolved_at) - new Date(t.called_at);
+  }
+  function fmtDuration(ms) {
+    if (ms == null || ms < 0) return '-';
+    const totalSec = Math.round(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+  }
+  function avg(arr) {
+    const nums = arr.filter(v => v != null);
+    return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+  }
+
+  function setRange(days, btnEl) {
+    currentDays = days;
+    document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+    btnEl.classList.add('active');
+    document.getElementById('rangeLabel').textContent = `Last ${days} Days - one day per row`;
+    render();
+  }
+
+  async function loadStats() {
+    const { data } = await supabaseClient.from('tokens').select('*');
+    allTokens = data || [];
+    render();
+  }
+
+  function render() {
+    const now = new Date();
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - (currentDays - 1));
+    startDate.setHours(0, 0, 0, 0);
+
+    const inRange = allTokens.filter(t => new Date(t.created_at) >= startDate);
+
+    document.getElementById('sTotal').textContent = inRange.length;
+    document.getElementById('sDismissed').textContent = inRange.filter(t => t.status === 'dismissed').length;
+    document.getElementById('sProcessed').textContent = inRange.filter(t => t.status === 'processed').length;
+
+    const avgWait = avg(inRange.map(waitTime));
+    const avgService = avg(inRange.map(serviceTime));
+    document.getElementById('sAvgWait').textContent = avgWait != null ? fmtDuration(avgWait) : '-';
+    document.getElementById('sAvgService').textContent = avgService != null ? fmtDuration(avgService) : '-';
+
+    const tbody = document.getElementById('dailyBody');
+    tbody.innerHTML = '';
+    for (let i = 0; i < currentDays; i++) {
+      const day = new Date(now);
+      day.setDate(day.getDate() - i);
+      const dayLabel = day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+      const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(day); dayEnd.setHours(23, 59, 59, 999);
+
+      const dayTokens = allTokens.filter(t => {
+        const c = new Date(t.created_at);
+        return c >= dayStart && c <= dayEnd;
+      });
+
+      const dGenerated = dayTokens.length;
+      const dDismissed = dayTokens.filter(t => t.status === 'dismissed').length;
+      const dResolved = dayTokens.filter(t => t.status === 'processed').length;
+      const dAvgWait = avg(dayTokens.map(waitTime));
+      const dAvgService = avg(dayTokens.map(serviceTime));
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${dayLabel}</td>
+        <td>${dGenerated}</td>
+        <td>${dDismissed}</td>
+        <td>${dResolved}</td>
+        <td>${dAvgWait != null ? fmtDuration(dAvgWait) : '-'}</td>
+        <td>${dAvgService != null ? fmtDuration(dAvgService) : '-'}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  loadStats();
+</script>
+</body>
+</html>

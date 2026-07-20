@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<div class="admin-layout">
+  <div class="sidebar" id="sidebar">
+    <div class="brand">
+      <img src="../shared/logo.jpg">
+      <span>Embassy of Pakistan, Kuwait</span>
+    </div>
+    <div class="nav-group-label">Dashboard</div>
+    <a class="nav-link" href="dashboard.html"><span>Main-Dashboard</span></a>
+    <div class="nav-group-label">Statistics / Settings</div>
+    <a class="nav-link" href="statistics.html"><span>Statistics</span></a>
+    <a class="nav-link" href="settings.html"><span>Settings</span></a>
+    <div style="flex:1"></div>
+    <button onclick="logout()" style="margin-top:20px;border:none;background:none;color:#eb5757;cursor:pointer;text-align:left;">Log out</button>
+  </div>
+
+  <div class="main">
+    <h1 class="page-title">Token Portal</h1>
+    <p class="page-subtitle">Manage tokens taken by clients</p>
+
+    <h3 style="margin-bottom:2px;">Token management portal</h3>
+    <p class="sub" style="margin-bottom:20px;">View active statistics and manage the tokens taken by visitors</p>
+
+    <div class="stats-row">
+      <div class="stat-card"><div class="label">Tokens Pending</div><div class="value" id="statPending">-</div><div class="bar" style="background:#f2994a"></div></div>
+      <div class="stat-card"><div class="label">Tokens Served</div><div class="value" id="statServed">-</div><div class="bar" style="background:#27ae60"></div></div>
+      <div class="stat-card"><div class="label">Tokens missed</div><div class="value" id="statMissed">-</div><div class="bar" style="background:#eb5757"></div></div>
+      <div class="stat-card"><div class="label">Avg Wait time</div><div class="value" id="statWait">-</div><div class="bar" style="background:#f2994a"></div></div>
+      <div class="stat-card"><div class="label">Avg Service time</div><div class="value" id="statService">-</div><div class="bar" style="background:#27ae60"></div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h3>Current Queue List</h3>
+        <div class="sub">Manage the queue list accordingly</div>
+        <table>
+          <thead><tr><th>Token#</th><th>Status</th><th>Wait time</th><th>Service time</th><th>Created at</th><th>Actions</th></tr></thead>
+          <tbody id="queueBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h3>Current Queue List</h3>
+        <div class="sub">Call, resolve and dismiss currently active token</div>
+        <div class="current-token-card">
+          <h4>Current Token Number</h4>
+          <div class="num" id="currentNum">-</div>
+          <div class="note" id="currentNote">No token is currently being called</div>
+        </div>
+        <div id="actionButtons"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/supabase.js"></script>
+<script>
+  async function checkAuth() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) window.location.href = 'login.html';
+  }
+  checkAuth();
+
+  function logout() { supabaseClient.auth.signOut().then(() => window.location.href = 'login.html'); }
+
+  function fmtTime(ts) {
+    if (!ts) return '-';
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function fmtDuration(ms) {
+    if (ms == null || ms < 0) return '-';
+    const totalSec = Math.round(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+  }
+
+  function waitTime(t) {
+    if (!t.called_at) return null;
+    return new Date(t.called_at) - new Date(t.created_at);
+  }
+
+  function serviceTime(t) {
+    if (!t.called_at || !t.resolved_at) return null;
+    return new Date(t.resolved_at) - new Date(t.called_at);
+  }
+
+  async function loadDashboard() {
+    const { data: allTokens } = await supabaseClient.from('tokens').select('*').order('id', { ascending: true });
+    if (!allTokens) return;
+    const tokens = allTokens.filter(t => !t.archived);
+
+    const pending = tokens.filter(t => t.status === 'pending').sort((a, b) => (a.priority_order ?? a.id) - (b.priority_order ?? b.id));
+    const calling = tokens.filter(t => t.status === 'calling');
+    const processed = tokens.filter(t => t.status === 'processed');
+    const dismissed = tokens.filter(t => t.status === 'dismissed');
+
+    document.getElementById('statPending').textContent = allTokens.filter(t => t.status === 'pending').length;
+    document.getElementById('statServed').textContent = allTokens.filter(t => t.status === 'processed').length;
+    document.getElementById('statMissed').textContent = allTokens.filter(t => t.status === 'dismissed').length;
+
+    const withWait = allTokens.filter(t => waitTime(t) != null).map(waitTime);
+    const withService = allTokens.filter(t => serviceTime(t) != null).map(serviceTime);
+    const avgWait = withWait.length ? withWait.reduce((a, b) => a + b, 0) / withWait.length : null;
+    const avgService = withService.length ? withService.reduce((a, b) => a + b, 0) / withService.length : null;
+    document.getElementById('statWait').textContent = avgWait != null ? fmtDuration(avgWait) : '-';
+    document.getElementById('statService').textContent = avgService != null ? fmtDuration(avgService) : '-';
+
+    const allCalledTimes = tokens.filter(t => t.called_at).map(t => new Date(t.called_at).getTime());
+    const mostRecentCallTime = allCalledTimes.length ? Math.max(...allCalledTimes) : null;
+
+    const visibleProcessed = processed.filter(t => {
+      if (!mostRecentCallTime || !t.resolved_at) return true;
+      return new Date(t.resolved_at).getTime() >= mostRecentCallTime;
+    });
+
+    const visibleRows = [...pending, ...calling, ...visibleProcessed, ...dismissed];
+    visibleRows.sort((a, b) => a.id - b.id);
+
+    const tbody = document.getElementById('queueBody');
+    tbody.innerHTML = '';
+    visibleRows.forEach(t => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${t.number}</td>
+        <td><span class="badge ${t.status}">${t.status}</span></td>
+        <td>${fmtDuration(waitTime(t))}</td>
+        <td>${fmtDuration(serviceTime(t))}</td>
+        <td>${fmtTime(t.created_at)}</td>
+        <td>${rowActions(t)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    const currentNum = document.getElementById('currentNum');
+    const currentNote = document.getElementById('currentNote');
+    const actionButtons = document.getElementById('actionButtons');
+
+    if (calling.length) {
+      currentNum.style.display = 'none';
+      let html = '';
+      calling.forEach(active => {
+        html += `<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.2);">
+          <div style="font-size:36px; font-weight:800;">${active.number}</div>
+          <div style="font-size:13px; opacity:.9; margin-bottom:8px;">This token is currently being called</div>`;
+        if (active.previous_status === 'pending') {
+          html += `<button class="btn btn-blue" onclick="callAgain(${active.id})">Call Again</button>`;
+        }
+        html += `<button class="btn btn-green" onclick="setStatus(${active.id}, 'processed')">Processed</button>`;
+        html += `<button class="btn btn-red" onclick="setStatus(${active.id}, 'dismissed')">Dismiss</button>`;
+        html += `</div>`;
+      });
+      currentNote.innerHTML = html;
+    } else {
+      currentNum.style.display = 'block';
+      currentNum.textContent = '-';
+      const lastResolved = [...processed, ...dismissed].sort((a, b) => b.id - a.id)[0];
+      currentNote.textContent = lastResolved ? `This token has been ${lastResolved.status === 'processed' ? 'Resolved' : 'Dismissed'}` : 'No token is currently being called';
+    }
+    actionButtons.innerHTML = `<button class="btn btn-blue" onclick="callNext()">Call Next token</button>`;
+  }
+
+  function rowActions(t) {
+    if (t.status === 'pending') {
+      return `
+        <button class="icon-btn" title="Move up" onclick="movePriority(${t.id}, 'up')">⬆️</button>
+        <button class="icon-btn" title="Move down" onclick="movePriority(${t.id}, 'down')">⬇️</button>
+        <button class="icon-btn" title="Call" onclick="callToken(${t.id})">📢</button>
+      `;
+    }
+    if (t.status === 'calling') {
+      return `
+        <button class="icon-btn" title="Recall" onclick="callToken(${t.id})">📢</button>
+        <button class="icon-btn" title="Dismiss" onclick="setStatus(${t.id}, 'dismissed')">🚫</button>
+        <button class="icon-btn" title="Processed" onclick="setStatus(${t.id}, 'processed')">✅</button>
+      `;
+    }
+    if (t.status === 'dismissed') {
+      return `
+        <button class="icon-btn" title="Call Again" onclick="callAgain(${t.id})">📢</button>
+        <button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>
+      `;
+    }
+    if (t.status === 'processed') {
+      return `<button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>`;
+    }
+    return '';
+  }
+
+  async function movePriority(id, direction) {
+    const { data: pendingTokens } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'pending')
+      .order('priority_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    const index = pendingTokens.findIndex(t => t.id === id);
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= pendingTokens.length) return;
+
+    const current = pendingTokens[index];
+    const swapWith = pendingTokens[swapIndex];
+
+    await supabaseClient.from('tokens').update({ priority_order: swapWith.priority_order ?? swapIndex }).eq('id', current.id);
+    await supabaseClient.from('tokens').update({ priority_order: current.priority_order ?? index }).eq('id', swapWith.id);
+
+    loadDashboard();
+  }
+
+  async function callNext() {
+    const { data: allT } = await supabaseClient.from('tokens').select('*').eq('archived', false);
+    const busyDepartments = new Set(allT.filter(t => t.status === 'calling').map(t => t.department_id));
+
+    const { data: pendingTokens } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'pending')
+      .order('priority_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    const next = pendingTokens.find(t => !busyDepartments.has(t.department_id));
+    if (!next) { alert('No pending tokens available (or all departments already have an active call).'); return; }
+    await callToken(next.id);
+  }
+
+  async function callToken(id) {
+    const { data: t } = await supabaseClient.from('tokens').select('*').eq('id', id).single();
+    const update = { status: 'calling', previous_status: t.status };
+    if (!t.called_at) update.called_at = new Date().toISOString();
+    await supabaseClient.from('tokens').update(update).eq('id', id);
+    loadDashboard();
+  }
+
+  async function callAgain(id) {
+    await callToken(id);
+  }
+
+  async function setStatus(id, newStatus) {
+    const { data: t } = await supabaseClient.from('tokens').select('*').eq('id', id).single();
+    await supabaseClient.from('tokens').update({
+      status: newStatus,
+      previous_status: t.status,
+      resolved_at: new Date().toISOString()
+    }).eq('id', id);
+    loadDashboard();
+  }
+
+  async function deleteToken(id) {
+    const { error } = await supabaseClient.from('tokens').update({ archived: true }).eq('id', id);
+    if (error) { alert('Failed: ' + error.message); console.error(error); }
+    loadDashboard();
+  }
+
+  supabaseClient
+    .channel('dashboard-tokens')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' }, loadDashboard)
+    .subscribe();
+
+  loadDashboard();
+</script>
+</body>
+</html>
