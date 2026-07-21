@@ -225,13 +225,15 @@ async function movePriority(id, direction) {
     loadDashboard();
 }
 
+
+
 async function clearStaleTokens() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
   await supabaseClient
     .from('tokens')
-    .update({ status: 'dismissed', previous_status: 'pending', resolved_at: new Date().toISOString() })
+    .update({ status: 'dismissed', previous_status: 'pending', resolved_at: new Date().toISOString(), archived: true })
     .in('status', ['pending', 'calling'])
     .lt('created_at', todayStart.toISOString());
 }
