@@ -50,15 +50,16 @@ btn.innerHTML = `<div class="name">${dept.name}</div><div class="desc">${descrip
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
 
-      const { count } = await supabaseClient
-        .from('tokens')
-        .select('*', { count: 'exact', head: true })
-        .eq('department_id', dept.id)
-        .gte('created_at', todayStart.toISOString());
-        
+  
 
-      const num = (count || 0) + 1;
-      const tokenNumber = `${dept.prefix}-${String(num).padStart(3, '0')}`;
+
+const { data: tokenNumber, error: numberError } = await supabaseClient
+        .rpc('get_next_token_number', { dept_id: dept.id, dept_prefix: dept.prefix });
+
+      if (numberError) { alert('Could not generate token number. Try again.'); console.error(numberError); return; }
+
+
+
 
       const { data, error } = await supabaseClient
         .from('tokens')
