@@ -64,6 +64,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/supabase.js"></script>
 <script>
+  let deptMap = {};
+
   async function checkAuth() {
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (!session) window.location.href = 'login.html';
@@ -96,6 +98,10 @@
   }
 
   async function loadDashboard() {
+    const { data: departments } = await supabaseClient.from('departments').select('*');
+    deptMap = {};
+    (departments || []).forEach(d => deptMap[d.id] = d);
+
     const { data: allTokens } = await supabaseClient.from('tokens').select('*').order('id', { ascending: true });
     if (!allTokens) return;
     const tokens = allTokens.filter(t => !t.archived);
@@ -171,11 +177,13 @@ const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
   }
 
   function rowActions(t) {
+    const printBtn = `<button class="icon-btn" title="Print token" onclick="printToken(${t.id})">🖨️</button>`;
     if (t.status === 'pending') {
       return `
         <button class="icon-btn" title="Move up" onclick="movePriority(${t.id}, 'up')">⬆️</button>
         <button class="icon-btn" title="Move down" onclick="movePriority(${t.id}, 'down')">⬇️</button>
         <button class="icon-btn" title="Call" onclick="callToken(${t.id})">📢</button>
+        ${printBtn}
       `;
     }
     if (t.status === 'calling') {
@@ -183,24 +191,77 @@ const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
         <button class="icon-btn" title="Recall" onclick="callToken(${t.id})">📢</button>
         <button class="icon-btn" title="Dismiss" onclick="setStatus(${t.id}, 'dismissed')">🚫</button>
         <button class="icon-btn" title="Processed" onclick="setStatus(${t.id}, 'processed')">✅</button>
+        ${printBtn}
       `;
     }
     if (t.status === 'dismissed') {
       return `
         <button class="icon-btn" title="Call Again" onclick="callAgain(${t.id})">📢</button>
         <button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>
+        ${printBtn}
       `;
     }
     if (t.status === 'processed') {
-      return `<button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>`;
+      return `
+        <button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>
+        ${printBtn}
+      `;
     }
-    return '';
+    return printBtn;
   }
 
  
 
+// Prints a slip with the token number and department name on it,
+// sized for a narrow thermal/token printer.
+function printToken(id) {
+    supabaseClient.from('tokens').select('*').eq('id', id).single().then(({ data: t, error }) => {
+      if (error || !t) { alert('Could not load token to print.'); return; }
 
+      const dept = deptMap[t.department_id];
+      const deptName = dept ? dept.name : 'General';
 
+      const printWindow = window.open('', '_blank', 'width=400,height=600');
+      if (!printWindow) { alert('Please allow pop-ups to print the token.'); return; }
+
+      printWindow.document.write(`
+        <html>
+        <head>
+          <title>Token ${t.number}</title>
+          <style>
+            @media print {
+              @page { margin: 0; }
+            }
+            body {
+              font-family: Arial, sans-serif;
+              width: 280px;
+              margin: 0 auto;
+              padding: 16px;
+              text-align: center;
+            }
+            .org { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+            .sub { font-size: 11px; color: #555; margin-bottom: 12px; }
+            .token-num { font-size: 52px; font-weight: 800; margin: 10px 0; letter-spacing: 1px; }
+            .dept { font-size: 18px; font-weight: 600; margin-bottom: 10px; }
+            .footer { font-size: 11px; color: #555; border-top: 1px dashed #999; margin-top: 14px; padding-top: 8px; }
+          </style>
+        </head>
+        <body>
+          <div class="org">Embassy of Pakistan, Kuwait</div>
+          <div class="sub">Please keep this token until called</div>
+          <div class="token-num">${t.number}</div>
+          <div class="dept">${deptName}</div>
+          <div class="footer">${new Date(t.created_at).toLocaleString()}</div>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.focus();
+        printWindow.print();
+      };
+    });
+}
 
 
 
