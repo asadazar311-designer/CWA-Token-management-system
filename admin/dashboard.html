@@ -215,7 +215,7 @@ function printToken(id) {
       const dept = deptMap[t.department_id];
       const deptName = dept ? dept.name : 'General';
 
-      const printWindow = window.open('', '_blank', 'width=400,height=600');
+      const printWindow = window.open('', '_blank', 'width=400,height=400');
       if (!printWindow) { alert('Please allow pop-ups to print the token.'); return; }
 
       printWindow.document.write(`
