@@ -29,6 +29,12 @@
     <h3 style="margin-bottom:2px;">Token management portal</h3>
     <p class="sub" style="margin-bottom:20px;">View active statistics and manage the tokens taken by visitors</p>
 
+    <div class="panel" style="margin-bottom:24px;">
+      <h3>Walk-in / No Phone Token</h3>
+      <div class="sub">For visitors without a mobile phone or QR scanner — select a department to generate and print their token</div>
+      <div id="walkinButtons" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px;"></div>
+    </div>
+
     <div class="stats-row">
       <div class="stat-card"><div class="label">Tokens Pending</div><div class="value" id="statPending">-</div><div class="bar" style="background:#f2994a"></div></div>
       <div class="stat-card"><div class="label">Tokens Served</div><div class="value" id="statServed">-</div><div class="bar" style="background:#27ae60"></div></div>
@@ -101,6 +107,7 @@
     const { data: departments } = await supabaseClient.from('departments').select('*');
     deptMap = {};
     (departments || []).forEach(d => deptMap[d.id] = d);
+    renderWalkinButtons(departments || []);
 
     const { data: allTokens } = await supabaseClient.from('tokens').select('*').order('id', { ascending: true });
     if (!allTokens) return;
@@ -174,6 +181,38 @@ const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
       currentNote.textContent = lastResolved ? `This token has been ${lastResolved.status === 'processed' ? 'Resolved' : 'Dismissed'}` : 'No token is currently being called';
     }
     actionButtons.innerHTML = `<button class="btn btn-blue" onclick="callNext()">Call Next token</button>`;
+  }
+
+  function renderWalkinButtons(departments) {
+    const container = document.getElementById('walkinButtons');
+    container.innerHTML = '';
+    departments.forEach(dept => {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-blue';
+      btn.style.width = 'auto';
+      btn.style.margin = '0';
+      btn.innerHTML = `🖨️ ${dept.name}`;
+      btn.onclick = () => createAndPrintWalkin(dept);
+      container.appendChild(btn);
+    });
+  }
+
+  async function createAndPrintWalkin(dept) {
+    const { data: tokenNumber, error: numberError } = await supabaseClient
+      .rpc('get_next_token_number', { dept_id: dept.id, dept_prefix: dept.prefix });
+
+    if (numberError) { alert('Could not generate token number.'); console.error(numberError); return; }
+
+    const { data, error } = await supabaseClient
+      .from('tokens')
+      .insert({ number: tokenNumber, department_id: dept.id, status: 'pending' })
+      .select()
+      .single();
+
+    if (error) { alert('Could not create token.'); console.error(error); return; }
+
+    printToken(data.id);
+    loadDashboard();
   }
 
   function rowActions(t) {
