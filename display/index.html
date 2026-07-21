@@ -72,22 +72,31 @@ body { overflow: auto; }
     document.getElementById('soundOverlay').style.display = 'none';
   }
 
-  function playChime() {
+
+
+
+
+ function playChime() {
     if (!soundEnabled || !audioCtx) return;
 
-    const notes = [{ freq: 700, time: 0 }, { freq: 750, time: 0.5 }];
-    notes.forEach(n => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.frequency.value = n.freq;
-      gain.gain.setValueAtTime(0.5, audioCtx.currentTime + n.time);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + n.time + 0.4);
-      osc.start(audioCtx.currentTime + n.time);
-      osc.stop(audioCtx.currentTime + n.time + 0.6);
-    });
-  }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.frequency.value = 750;
+    osc.type = 'sine';
+
+    // Quick rise to loud, then slow fade out over ~2.5 seconds
+    gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.6, audioCtx.currentTime + 0.15);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.5);
+
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 2.5);
+}
+
+
 
   async function loadDisplay() {
     const { data: departments } = await supabaseClient.from('departments').select('*');
