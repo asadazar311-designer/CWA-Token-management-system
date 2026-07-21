@@ -84,7 +84,7 @@ body { overflow: auto; }
     osc.connect(gain);
     gain.connect(audioCtx.destination);
 
-    osc.frequency.value = 887; // Frequency in Hz
+    osc.frequency.value = 770; // Frequency in Hz
     osc.type = 'sine';
 
     // Quick rise to loud, then slow fade out over ~2.5 seconds
@@ -93,7 +93,7 @@ body { overflow: auto; }
     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.5); 
 
     osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + 1.5); // Stop after 1.5 seconds
+    osc.stop(audioCtx.currentTime + 1); // Stop after 1.5 seconds
 }
 
 
