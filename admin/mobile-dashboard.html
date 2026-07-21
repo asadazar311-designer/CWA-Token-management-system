@@ -16,6 +16,9 @@
     width: 100%;
     max-width: 480px;
   }
+  .mobile-panel .stats-row {
+    margin-bottom: 16px;
+  }
   .mobile-panel .panel {
     width: 100%;
     box-sizing: border-box;
@@ -34,6 +37,9 @@
 </head>
 <body>
 <div class="mobile-panel">
+  <div class="stats-row">
+    <div class="stat-card"><div class="label">Tokens Pending</div><div class="value" id="statPending">-</div><div class="bar" style="background:#f2994a"></div></div>
+  </div>
   <div class="panel">
     <h3>Current Queue List</h3>
     <div class="sub">Call, resolve and dismiss currently active token</div>
@@ -59,6 +65,8 @@
     const { data: allTokens } = await supabaseClient.from('tokens').select('*').order('id', { ascending: true });
     if (!allTokens) return;
     const tokens = allTokens.filter(t => !t.archived);
+
+    document.getElementById('statPending').textContent = allTokens.filter(t => t.status === 'pending').length;
 
     const calling = tokens.filter(t => t.status === 'calling');
     const processed = tokens.filter(t => t.status === 'processed');
