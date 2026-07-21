@@ -5,13 +5,14 @@
 <title>Waiting Display</title>
 <link rel="stylesheet" href="../shared/style.css">
 <style>
- 
 body { overflow: auto; }
-
-  [dir="rtl"] { font-family: 'Noto Nastaliq Urdu', 'Segoe UI', sans-serif; }
+[dir="rtl"] { font-family: 'Noto Nastaliq Urdu', 'Segoe UI', sans-serif; }
 </style>
 </head>
 <body>
+<div id="soundOverlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.85); color:#fff; display:flex; align-items:center; justify-content:center; z-index:999; cursor:pointer; font-size:24px; text-align:center;" onclick="enableDisplaySound()">
+  🔊 Click to enable sound alerts
+</div>
 <div class="display-layout" id="layout">
   <div class="next-list">
     <h2 id="nextTitle">Tokens next in line</h2>
@@ -55,12 +56,38 @@ body { overflow: auto; }
   const deskNames = {
     'NADRA': { en: 'NADRA', ur: 'نادرا ڈیسک' },
     'Passport Section': { en: 'Passport', ur: 'پاسپورٹ ڈیسک' },
+    'Consular section': { en: 'Consular', ur: 'قونصلر ڈیسک' },
     'Welfare Wing': { en: 'Welfare', ur: 'ویلفیئر ڈیسک' },
-    'Nurses': { en: 'Nurses', ur: 'نرسز ڈیسک' },
     'Special Visit / Other': { en: 'Meeting Room', ur: 'میٹنگ روم' }
   };
 
   let lang = 'en';
+  let soundEnabled = false;
+  let audioCtx = null;
+  let lastCalledNumber = null;
+
+  function enableDisplaySound() {
+    soundEnabled = true;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    document.getElementById('soundOverlay').style.display = 'none';
+  }
+
+  function playChime() {
+    if (!soundEnabled || !audioCtx) return;
+
+    const notes = [{ freq: 880, time: 0 }, { freq: 660, time: 0.35 }];
+    notes.forEach(n => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.frequency.value = n.freq;
+      gain.gain.setValueAtTime(0.5, audioCtx.currentTime + n.time);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + n.time + 0.4);
+      osc.start(audioCtx.currentTime + n.time);
+      osc.stop(audioCtx.currentTime + n.time + 0.4);
+    });
+  }
 
   async function loadDisplay() {
     const { data: departments } = await supabaseClient.from('departments').select('*');
@@ -76,7 +103,13 @@ body { overflow: auto; }
     document.getElementById('currentLabel').textContent = t.currentLabel;
     document.getElementById('orgTitle').innerHTML = `<span class="green">${t.orgTitleGreen}</span> ${t.orgTitleRest}`;
 
-    document.getElementById('currentNum').textContent = calling && calling.length ? calling[0].number : '-';
+    const newNumber = calling && calling.length ? calling[0].number : null;
+    if (newNumber && newNumber !== lastCalledNumber) {
+      playChime();
+    }
+    lastCalledNumber = newNumber;
+    document.getElementById('currentNum').textContent = newNumber || '-';
+
     const dept = calling && calling.length ? deptMap[calling[0].department_id] : null;
 
     if (dept) {
@@ -95,7 +128,7 @@ body { overflow: auto; }
       const div = document.createElement('div');
       div.className = 'next-item';
 
-div.innerHTML = `<span>${p.number}</span>${i === 0 ? `<span style="font-size:clamp(16px, 2.5vw, 28px);">${t.next}</span>` : ''}`;
+      div.innerHTML = `<span>${p.number}</span>${i === 0 ? `<span style="font-size:clamp(16px, 2.5vw, 28px);">${t.next}</span>` : ''}`;
 
       nextContainer.appendChild(div);
     });
