@@ -17,6 +17,9 @@
         <div class="status-label" id="statusLabel">Loading...</div>
         <div class="token-number" id="tokenNumber">-</div>
         <div class="status-note" id="statusNote"></div>
+        <div class="status-note" id="statusNoteUr" style="direction:rtl; margin-top:4px;"></div>
+        <div class="status-note" id="deskNote" style="margin-top:8px; font-weight:700;"></div>
+        <div class="status-note" id="deskNoteUr" style="direction:rtl; font-weight:700;"></div>
         <div class="status-note" id="currentServingNote" style="margin-top:6px;"></div>
       </div>
 
@@ -39,6 +42,14 @@
 
     document.getElementById('deptName').textContent =
       (params.get('dept') || '') + ' token';
+
+    const deskNames = {
+      'NADRA': { en: 'NADRA', ur: 'نادرا ڈیسک' },
+      'Passport Section': { en: 'Passport', ur: 'پاسپورٹ ڈیسک' },
+      'Consular section': { en: 'Consular', ur: 'قونصلر ڈیسک' },
+      'Welfare Wing': { en: 'Welfare', ur: 'ویلفیئر ڈیسک' },
+      'Special Visit / Other': { en: 'Meeting Room', ur: 'میٹنگ روم' }
+    };
 
     let hasNotified = false;
     let alertsEnabled = false;
@@ -70,22 +81,20 @@
         navigator.vibrate([200, 100, 200]);
       }
 
- try {
+      try {
         const oscillator = sharedAudioCtx.createOscillator();
         const gainNode = sharedAudioCtx.createGain();
         oscillator.connect(gainNode);
         gainNode.connect(sharedAudioCtx.destination);
-        oscillator.frequency.value = 758;// Frequency in Hz
-        gainNode.gain.setValueAtTime(0.15, sharedAudioCtx.currentTime);// Set initial volume
-        gainNode.gain.exponentialRampToValueAtTime(0.001, sharedAudioCtx.currentTime + 0.6);// Fade out over 0.3 seconds
+        oscillator.frequency.value = 758;
+        gainNode.gain.setValueAtTime(0.15, sharedAudioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, sharedAudioCtx.currentTime + 0.6);
         oscillator.start();
-        oscillator.stop(sharedAudioCtx.currentTime + 0.6);// Stop after 0.6 seconds
+        oscillator.stop(sharedAudioCtx.currentTime + 0.6);
       } catch (e) {
         console.log('Audio not available:', e);
       }
     }
-
-
 
     function render(token) {
 
@@ -94,6 +103,9 @@
       const box = document.getElementById('statusBox');
       const label = document.getElementById('statusLabel');
       const note = document.getElementById('statusNote');
+      const noteUr = document.getElementById('statusNoteUr');
+      const deskNote = document.getElementById('deskNote');
+      const deskNoteUr = document.getElementById('deskNoteUr');
 
       const clock = document.getElementById('clock');
       const speaker = document.getElementById('loudspeaker');
@@ -106,30 +118,43 @@
       speaker.style.display = 'none';
       checkmark.style.display = 'none';
       dismissedIcon.style.display = 'none';
+      deskNote.textContent = '';
+      deskNoteUr.textContent = '';
+
+      const deptDisplayName = params.get('dept') || '';
+      const desk = deskNames[deptDisplayName];
 
       if (token.status === 'pending') {
 
         label.textContent = 'Your token number is';
         note.textContent = 'Please wait for your token to be called';
+        noteUr.textContent = 'براہ کرم اپنے ٹوکن کے بلائے جانے کا انتظار کریں';
         clock.style.display = 'block';
 
       } else if (token.status === 'calling') {
 
         label.textContent = 'Your token number is';
         note.textContent = 'Your token is being called';
+        noteUr.textContent = 'آپ کا ٹوکن بلایا جا رہا ہے';
         speaker.style.display = 'block';
+        if (desk) {
+          deskNote.textContent = `Proceed to ${desk.en} Desk`;
+          deskNoteUr.textContent = `براہ کرم ${desk.ur} پر جائیں`;
+        }
         notifyCalled();
 
       } else if (token.status === 'processed') {
 
         label.textContent = 'Your token has been processed';
         note.textContent = 'You may now close the application';
+        noteUr.textContent = 'اب آپ ایپلیکیشن بند کر سکتے ہیں';
         checkmark.style.display = 'block';
 
       } else if (token.status === 'dismissed') {
 
         label.textContent = 'Your token has been dismissed';
         note.textContent = 'You did not respond to your token call. Please take another token.';
+        noteUr.textContent = 'آپ نے اپنے ٹوکن کال کا جواب نہیں دیا۔ براہ کرم دوبارہ ٹوکن حاصل کریں۔';
         dismissedIcon.style.display = 'block';
 
       }
