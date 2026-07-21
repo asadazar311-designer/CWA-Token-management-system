@@ -177,13 +177,12 @@ const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
   }
 
   function rowActions(t) {
-    const printBtn = `<button class="icon-btn" title="Print token" onclick="printToken(${t.id})">🖨️</button>`;
     if (t.status === 'pending') {
       return `
         <button class="icon-btn" title="Move up" onclick="movePriority(${t.id}, 'up')">⬆️</button>
         <button class="icon-btn" title="Move down" onclick="movePriority(${t.id}, 'down')">⬇️</button>
         <button class="icon-btn" title="Call" onclick="callToken(${t.id})">📢</button>
-        ${printBtn}
+        <button class="icon-btn" title="Print token" onclick="printToken(${t.id})">🖨️</button>
       `;
     }
     if (t.status === 'calling') {
@@ -191,23 +190,18 @@ const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
         <button class="icon-btn" title="Recall" onclick="callToken(${t.id})">📢</button>
         <button class="icon-btn" title="Dismiss" onclick="setStatus(${t.id}, 'dismissed')">🚫</button>
         <button class="icon-btn" title="Processed" onclick="setStatus(${t.id}, 'processed')">✅</button>
-        ${printBtn}
       `;
     }
     if (t.status === 'dismissed') {
       return `
         <button class="icon-btn" title="Call Again" onclick="callAgain(${t.id})">📢</button>
         <button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>
-        ${printBtn}
       `;
     }
     if (t.status === 'processed') {
-      return `
-        <button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>
-        ${printBtn}
-      `;
+      return `<button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>`;
     }
-    return printBtn;
+    return '';
   }
 
  
@@ -229,15 +223,20 @@ function printToken(id) {
         <head>
           <title>Token ${t.number}</title>
           <style>
+            /* Currently set up for a normal printer (A4/Letter).
+               Once you get a thermal token printer, change this to:
+               @page { size: 80mm auto; margin: 0; }  (adjust mm to your roll width) */
             @media print {
-              @page { margin: 0; }
+              @page { margin: 1cm; }
             }
             body {
               font-family: Arial, sans-serif;
               width: 280px;
-              margin: 0 auto;
+              margin: 40px auto 0;
               padding: 16px;
               text-align: center;
+              border: 2px dashed #333;
+              border-radius: 8px;
             }
             .org { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
             .sub { font-size: 11px; color: #555; margin-bottom: 12px; }
