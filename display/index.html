@@ -75,7 +75,7 @@ body { overflow: auto; }
   function playChime() {
     if (!soundEnabled || !audioCtx) return;
 
-    const notes = [{ freq: 880, time: 0 }, { freq: 660, time: 0.35 }];
+    const notes = [{ freq: 700, time: 0 }, { freq: 750, time: 0.5 }];
     notes.forEach(n => {
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
@@ -85,7 +85,7 @@ body { overflow: auto; }
       gain.gain.setValueAtTime(0.5, audioCtx.currentTime + n.time);
       gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + n.time + 0.4);
       osc.start(audioCtx.currentTime + n.time);
-      osc.stop(audioCtx.currentTime + n.time + 0.4);
+      osc.stop(audioCtx.currentTime + n.time + 0.6);
     });
   }
 
