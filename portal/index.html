@@ -22,6 +22,7 @@
     // Remember the customer's current token so they can't grab a second one
     // by hitting Back and choosing another department.
     const STORAGE_KEY = 'qms_active_token';
+    const TOKEN_ENABLED_DEPARTMENTS = new Set(['NADRA']);
 
     function getStoredToken() {
       try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); }
@@ -83,12 +84,17 @@
         const displayName = dept.name === 'Welfare Wing' ? 'Welfare Wing Man Power' : dept.name;
         btn.innerHTML = `<div class="name">${displayName}</div><div class="desc">${descriptions[dept.name] || ''}</div>`;
 
+        const tokenEnabled = TOKEN_ENABLED_DEPARTMENTS.has(dept.name);
+        btn.dataset.tokenEnabled = String(tokenEnabled);
+        btn.disabled = !tokenEnabled;
         btn.onclick = () => createToken(dept);
         container.appendChild(btn);
       });
     }
 
     async function createToken(dept) {
+      if (!TOKEN_ENABLED_DEPARTMENTS.has(dept.name)) return;
+
       // Lock every button so a double-tap (or impatient clicking) can't fire twice.
       const buttons = document.querySelectorAll('.dept-btn');
       buttons.forEach(b => { b.disabled = true; b.style.opacity = '0.6'; });
@@ -99,7 +105,10 @@
       if (numberError) {
         alert('Could not generate token number. Try again.');
         console.error(numberError);
-        buttons.forEach(b => { b.disabled = false; b.style.opacity = ''; });
+        buttons.forEach(b => {
+          b.disabled = b.dataset.tokenEnabled !== 'true';
+          b.style.opacity = '';
+        });
         return;
       }
 
@@ -112,7 +121,10 @@
       if (error) {
         alert('Could not create token. Try again.');
         console.error(error);
-        buttons.forEach(b => { b.disabled = false; b.style.opacity = ''; });
+        buttons.forEach(b => {
+          b.disabled = b.dataset.tokenEnabled !== 'true';
+          b.style.opacity = '';
+        });
         return;
       }
 
