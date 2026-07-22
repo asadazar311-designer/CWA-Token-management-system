@@ -3,58 +3,69 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NADRA Portal - Mobile</title>
+<title>NADRA Dashboard</title>
 <link rel="stylesheet" href="../shared/style.css">
-<style>
-  body {
-    margin: 0;
-    padding: 16px;
-    display: flex;
-    justify-content: center;
-  }
-  .mobile-panel {
-    width: 100%;
-    max-width: 480px;
-  }
-  .mobile-panel .stats-row {
-    margin-bottom: 16px;
-  }
-  .mobile-panel .panel {
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .current-token-card .num {
-    font-size: 48px;
-  }
-  #actionButtons .btn,
-  #currentNote .btn {
-    width: 100%;
-    box-sizing: border-box;
-    margin-bottom: 10px;
-    text-align: center;
-  }
-</style>
 </head>
 <body>
-<div class="mobile-panel">
-  <div class="stats-row">
-    <div class="stat-card"><div class="label">NADRA Tokens Pending</div><div class="value" id="statPending">-</div><div class="bar" style="background:#f2994a"></div></div>
-  </div>
-  <div class="panel">
-    <h3>NADRA Queue</h3>
-    <div class="sub">Call, resolve and dismiss the currently active NADRA token</div>
-    <div class="current-token-card">
-      <h4>Current Token Number</h4>
-      <div class="num" id="currentNum">-</div>
-      <div class="note" id="currentNote">No token is currently being called</div>
+<div class="admin-layout">
+  <div class="sidebar" id="sidebar">
+    <div class="brand">
+      <img src="../shared/logo.jpg">
+      <span>NADRA</span>
     </div>
-    <div id="actionButtons"></div>
+    <div class="nav-group-label">Dashboard</div>
+    <a class="nav-link" href="dashboard.html"><span>Reception (All Departments)</span></a>
+    <a class="nav-link" href="nadra-dashboard.html"><span>NADRA Dashboard</span></a>
+    <div class="nav-group-label">Statistics / Settings</div>
+    <a class="nav-link" href="statistics.html"><span>Statistics</span></a>
+    <a class="nav-link" href="settings.html"><span>Settings</span></a>
+    <div style="flex:1"></div>
+    <button onclick="logout()" style="margin-top:20px;border:none;background:none;color:#eb5757;cursor:pointer;text-align:left;">Log out</button>
+  </div>
+
+  <div class="main">
+    <h1 class="page-title">NADRA Token Portal</h1>
+    <p class="page-subtitle">Manage tokens for the NADRA department only</p>
+
+    <h3 style="margin-bottom:2px;">NADRA queue</h3>
+    <p class="sub" style="margin-bottom:20px;">View active statistics and manage NADRA's tokens only</p>
+
+    <div class="stats-row">
+      <div class="stat-card"><div class="label">Tokens Pending</div><div class="value" id="statPending">-</div><div class="bar" style="background:#f2994a"></div></div>
+      <div class="stat-card"><div class="label">Tokens Served</div><div class="value" id="statServed">-</div><div class="bar" style="background:#27ae60"></div></div>
+      <div class="stat-card"><div class="label">Tokens missed</div><div class="value" id="statMissed">-</div><div class="bar" style="background:#eb5757"></div></div>
+      <div class="stat-card"><div class="label">Avg Wait time</div><div class="value" id="statWait">-</div><div class="bar" style="background:#f2994a"></div></div>
+      <div class="stat-card"><div class="label">Avg Service time</div><div class="value" id="statService">-</div><div class="bar" style="background:#27ae60"></div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h3>NADRA Queue List</h3>
+        <div class="sub">Manage the NADRA queue accordingly</div>
+        <table>
+          <thead><tr><th>Token#</th><th>Status</th><th>Wait time</th><th>Service time</th><th>Created at</th><th>Actions</th></tr></thead>
+          <tbody id="queueBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h3>Current NADRA Token</h3>
+        <div class="sub">Call, resolve and dismiss the currently active NADRA token</div>
+        <div class="current-token-card">
+          <h4>Current Token Number</h4>
+          <div class="num" id="currentNum">-</div>
+          <div class="note" id="currentNote">No token is currently being called</div>
+        </div>
+        <div id="actionButtons"></div>
+      </div>
+    </div>
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/supabase.js"></script>
 <script>
+  // This dashboard only ever shows/acts on tokens belonging to this department.
   const DEPARTMENT_NAME = 'NADRA';
   let myDeptId = null;
 
@@ -63,6 +74,31 @@
     if (!session) window.location.href = 'login.html';
   }
   checkAuth();
+
+  function logout() { supabaseClient.auth.signOut().then(() => window.location.href = 'login.html'); }
+
+  function fmtTime(ts) {
+    if (!ts) return '-';
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function fmtDuration(ms) {
+    if (ms == null || ms < 0) return '-';
+    const totalSec = Math.round(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+  }
+
+  function waitTime(t) {
+    if (!t.called_at) return null;
+    return new Date(t.called_at) - new Date(t.created_at);
+  }
+
+  function serviceTime(t) {
+    if (!t.called_at || !t.resolved_at) return null;
+    return new Date(t.resolved_at) - new Date(t.called_at);
+  }
 
   async function loadDashboard() {
     const { data: dept } = await supabaseClient.from('departments').select('*').eq('name', DEPARTMENT_NAME).single();
@@ -77,11 +113,46 @@
     if (!allTokens) return;
     const tokens = allTokens.filter(t => !t.archived);
 
-    document.getElementById('statPending').textContent = allTokens.filter(t => t.status === 'pending').length;
-
+    const pending = tokens.filter(t => t.status === 'pending').sort((a, b) => (a.priority_order ?? a.id) - (b.priority_order ?? b.id));
     const calling = tokens.filter(t => t.status === 'calling');
     const processed = tokens.filter(t => t.status === 'processed');
     const dismissed = tokens.filter(t => t.status === 'dismissed');
+
+    document.getElementById('statPending').textContent = allTokens.filter(t => t.status === 'pending').length;
+    document.getElementById('statServed').textContent = allTokens.filter(t => t.status === 'processed').length;
+    document.getElementById('statMissed').textContent = allTokens.filter(t => t.status === 'dismissed').length;
+
+    const withWait = allTokens.filter(t => waitTime(t) != null).map(waitTime);
+    const withService = allTokens.filter(t => serviceTime(t) != null).map(serviceTime);
+    const avgWait = withWait.length ? withWait.reduce((a, b) => a + b, 0) / withWait.length : null;
+    const avgService = withService.length ? withService.reduce((a, b) => a + b, 0) / withService.length : null;
+    document.getElementById('statWait').textContent = avgWait != null ? fmtDuration(avgWait) : '-';
+    document.getElementById('statService').textContent = avgService != null ? fmtDuration(avgService) : '-';
+
+    const allCalledTimes = tokens.filter(t => t.called_at).map(t => new Date(t.called_at).getTime());
+    const mostRecentCallTime = allCalledTimes.length ? Math.max(...allCalledTimes) : null;
+
+    const visibleProcessed = processed.filter(t => {
+      if (!mostRecentCallTime || !t.resolved_at) return true;
+      return new Date(t.resolved_at).getTime() >= mostRecentCallTime;
+    });
+
+    const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
+
+    const tbody = document.getElementById('queueBody');
+    tbody.innerHTML = '';
+    visibleRows.forEach(t => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${t.number}</td>
+        <td><span class="badge ${t.status}">${t.status}</span></td>
+        <td>${fmtDuration(waitTime(t))}</td>
+        <td>${fmtDuration(serviceTime(t))}</td>
+        <td>${fmtTime(t.created_at)}</td>
+        <td>${rowActions(t)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
 
     const currentNum = document.getElementById('currentNum');
     const currentNote = document.getElementById('currentNote');
@@ -102,14 +173,62 @@
         html += `</div>`;
       });
       currentNote.innerHTML = html;
-      actionButtons.innerHTML = '';
     } else {
       currentNum.style.display = 'block';
       currentNum.textContent = '-';
       const lastResolved = [...processed, ...dismissed].sort((a, b) => b.id - a.id)[0];
       currentNote.textContent = lastResolved ? `This token has been ${lastResolved.status === 'processed' ? 'Resolved' : 'Dismissed'}` : 'No token is currently being called';
-      actionButtons.innerHTML = `<button class="btn btn-blue" onclick="callNext()">Call Next NADRA token</button>`;
     }
+    actionButtons.innerHTML = `<button class="btn btn-blue" onclick="callNext()">Call Next NADRA token</button>`;
+  }
+
+  function rowActions(t) {
+    if (t.status === 'pending') {
+      return `
+        <button class="icon-btn" title="Move up" onclick="movePriority(${t.id}, 'up')">⬆️</button>
+        <button class="icon-btn" title="Move down" onclick="movePriority(${t.id}, 'down')">⬇️</button>
+        <button class="icon-btn" title="Call" onclick="callToken(${t.id})">📢</button>
+      `;
+    }
+    if (t.status === 'calling') {
+      return `
+        <button class="icon-btn" title="Recall" onclick="callToken(${t.id})">📢</button>
+        <button class="icon-btn" title="Dismiss" onclick="setStatus(${t.id}, 'dismissed')">🚫</button>
+        <button class="icon-btn" title="Processed" onclick="setStatus(${t.id}, 'processed')">✅</button>
+      `;
+    }
+    if (t.status === 'dismissed') {
+      return `
+        <button class="icon-btn" title="Call Again" onclick="callAgain(${t.id})">📢</button>
+        <button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>
+      `;
+    }
+    if (t.status === 'processed') {
+      return `<button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>`;
+    }
+    return '';
+  }
+
+  async function movePriority(id, direction) {
+    const { data: pendingTokens } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'pending')
+      .eq('department_id', myDeptId)
+      .order('priority_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    const index = pendingTokens.findIndex(t => t.id === id);
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= pendingTokens.length) return;
+
+    [pendingTokens[index], pendingTokens[swapIndex]] = [pendingTokens[swapIndex], pendingTokens[index]];
+
+    for (let i = 0; i < pendingTokens.length; i++) {
+      await supabaseClient.from('tokens').update({ priority_order: i }).eq('id', pendingTokens[i].id);
+    }
+
+    loadDashboard();
   }
 
   async function clearStaleTokens() {
@@ -165,8 +284,14 @@
     loadDashboard();
   }
 
+  async function deleteToken(id) {
+    const { error } = await supabaseClient.from('tokens').update({ archived: true }).eq('id', id);
+    if (error) { alert('Failed: ' + error.message); console.error(error); }
+    loadDashboard();
+  }
+
   supabaseClient
-    .channel('nadra-mobile-tokens')
+    .channel('nadra-dashboard-tokens')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' }, loadDashboard)
     .subscribe();
 
