@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NADRA Portal - Mobile</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  body {
+    margin: 0;
+    padding: 16px;
+    display: flex;
+    justify-content: center;
+  }
+  .mobile-panel {
+    width: 100%;
+    max-width: 480px;
+  }
+  .mobile-panel .stats-row {
+    margin-bottom: 16px;
+  }
+  .mobile-panel .panel {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .current-token-card .num {
+    font-size: 48px;
+  }
+  #actionButtons .btn,
+  #currentNote .btn {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="mobile-panel">
+  <div class="stats-row">
+    <div class="stat-card"><div class="label">NADRA Tokens Pending</div><div class="value" id="statPending">-</div><div class="bar" style="background:#f2994a"></div></div>
+  </div>
+  <div class="panel">
+    <h3>NADRA Queue</h3>
+    <div class="sub">Call, resolve and dismiss the currently active NADRA token</div>
+    <div class="current-token-card">
+      <h4>Current Token Number</h4>
+      <div class="num" id="currentNum">-</div>
+      <div class="note" id="currentNote">No token is currently being called</div>
+    </div>
+    <div id="actionButtons"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/supabase.js"></script>
+<script>
+  const DEPARTMENT_NAME = 'NADRA';
+  let myDeptId = null;
+
+  async function checkAuth() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) window.location.href = 'login.html';
+  }
+  checkAuth();
+
+  async function loadDashboard() {
+    const { data: dept } = await supabaseClient.from('departments').select('*').eq('name', DEPARTMENT_NAME).single();
+    if (!dept) { console.error(`Department "${DEPARTMENT_NAME}" not found.`); return; }
+    myDeptId = dept.id;
+
+    const { data: allTokens } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('department_id', myDeptId)
+      .order('id', { ascending: true });
+    if (!allTokens) return;
+    const tokens = allTokens.filter(t => !t.archived);
+
+    document.getElementById('statPending').textContent = allTokens.filter(t => t.status === 'pending').length;
+
+    const calling = tokens.filter(t => t.status === 'calling');
+    const processed = tokens.filter(t => t.status === 'processed');
+    const dismissed = tokens.filter(t => t.status === 'dismissed');
+
+    const currentNum = document.getElementById('currentNum');
+    const currentNote = document.getElementById('currentNote');
+    const actionButtons = document.getElementById('actionButtons');
+
+    if (calling.length) {
+      currentNum.style.display = 'none';
+      let html = '';
+      calling.forEach(active => {
+        html += `<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.2);">
+          <div style="font-size:36px; font-weight:800;">${active.number}</div>
+          <div style="font-size:13px; opacity:.9; margin-bottom:8px;">This token is currently being called</div>`;
+        if (active.previous_status === 'pending') {
+          html += `<button class="btn btn-blue" onclick="callAgain(${active.id})">Call Again</button>`;
+        }
+        html += `<button class="btn btn-green" onclick="setStatus(${active.id}, 'processed')">Processed</button>`;
+        html += `<button class="btn btn-red" onclick="setStatus(${active.id}, 'dismissed')">Dismiss</button>`;
+        html += `</div>`;
+      });
+      currentNote.innerHTML = html;
+      actionButtons.innerHTML = '';
+    } else {
+      currentNum.style.display = 'block';
+      currentNum.textContent = '-';
+      const lastResolved = [...processed, ...dismissed].sort((a, b) => b.id - a.id)[0];
+      currentNote.textContent = lastResolved ? `This token has been ${lastResolved.status === 'processed' ? 'Resolved' : 'Dismissed'}` : 'No token is currently being called';
+      actionButtons.innerHTML = `<button class="btn btn-blue" onclick="callNext()">Call Next NADRA token</button>`;
+    }
+  }
+
+  async function clearStaleTokens() {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    await supabaseClient
+      .from('tokens')
+      .update({ status: 'dismissed', previous_status: 'pending', resolved_at: new Date().toISOString(), archived: true })
+      .in('status', ['pending', 'calling'])
+      .lt('created_at', todayStart.toISOString());
+  }
+
+  async function callNext() {
+    const { data: pendingTokens } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'pending')
+      .eq('department_id', myDeptId)
+      .order('priority_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    const { data: alreadyCalling } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'calling')
+      .eq('department_id', myDeptId);
+
+    if (alreadyCalling && alreadyCalling.length) { alert('A NADRA token is already being called.'); return; }
+    if (!pendingTokens || !pendingTokens.length) { alert('No pending NADRA tokens available.'); return; }
+    await callToken(pendingTokens[0].id);
+  }
+
+  async function callToken(id) {
+    const { data: t } = await supabaseClient.from('tokens').select('*').eq('id', id).single();
+    const update = { status: 'calling', previous_status: t.status };
+    if (!t.called_at) update.called_at = new Date().toISOString();
+    await supabaseClient.from('tokens').update(update).eq('id', id);
+    loadDashboard();
+  }
+
+  async function callAgain(id) {
+    await callToken(id);
+  }
+
+  async function setStatus(id, newStatus) {
+    const { data: t } = await supabaseClient.from('tokens').select('*').eq('id', id).single();
+    await supabaseClient.from('tokens').update({
+      status: newStatus,
+      previous_status: t.status,
+      resolved_at: new Date().toISOString()
+    }).eq('id', id);
+    loadDashboard();
+  }
+
+  supabaseClient
+    .channel('nadra-mobile-tokens')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' }, loadDashboard)
+    .subscribe();
+
+  clearStaleTokens().then(loadDashboard);
+</script>
+</body>
+</html>

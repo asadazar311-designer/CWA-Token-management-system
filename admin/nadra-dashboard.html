@@ -196,12 +196,12 @@
     btn.className = 'btn btn-blue';
     btn.style.width = 'auto';
     btn.style.margin = '0';
-    btn.innerHTML = `🖨️ New NADRA Token`;
-    btn.onclick = () => createAndPrintWalkin();
+    btn.innerHTML = `➕ New NADRA Token`;
+    btn.onclick = () => createWalkin();
     container.appendChild(btn);
   }
 
-  async function createAndPrintWalkin() {
+  async function createWalkin() {
     if (!myDeptId) { alert('Department not loaded yet, try again in a moment.'); return; }
     const prefix = 'N';
 
@@ -235,7 +235,6 @@
 
     if (error) { alert('Could not create token.'); console.error(error); return; }
 
-    printToken(data.id);
     loadDashboard();
   }
 
@@ -245,7 +244,6 @@
         <button class="icon-btn" title="Move up" onclick="movePriority(${t.id}, 'up')">⬆️</button>
         <button class="icon-btn" title="Move down" onclick="movePriority(${t.id}, 'down')">⬇️</button>
         <button class="icon-btn" title="Call" onclick="callToken(${t.id})">📢</button>
-        <button class="icon-btn" title="Print token" onclick="printToken(${t.id})">🖨️</button>
       `;
     }
     if (t.status === 'calling') {
@@ -265,56 +263,6 @@
       return `<button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>`;
     }
     return '';
-  }
-
-  // Prints a slip with the token number and department name on it,
-  // sized for a narrow thermal/token printer.
-  function printToken(id) {
-    supabaseClient.from('tokens').select('*').eq('id', id).single().then(({ data: t, error }) => {
-      if (error || !t) { alert('Could not load token to print.'); return; }
-
-      const printWindow = window.open('', '_blank', 'width=400,height=600');
-      if (!printWindow) { alert('Please allow pop-ups to print the token.'); return; }
-
-      printWindow.document.write(`
-        <html>
-        <head>
-          <title>Token ${t.number}</title>
-          <style>
-            /* Thermal token printer - 80mm roll width, short finger-length slip.
-               If your roll is 58mm instead, change both 80mm values below. */
-            @media print {
-              @page { size: 80mm 60mm; margin: 0; }
-            }
-            body {
-              font-family: Arial, sans-serif;
-              width: 80mm;
-              margin: 0;
-              padding: 6px 4px;
-              text-align: center;
-            }
-            .org { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
-            .sub { font-size: 9px; color: #555; margin-bottom: 4px; }
-            .token-num { font-size: 34px; font-weight: 800; margin: 3px 0; letter-spacing: 1px; line-height: 1; }
-            .dept { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
-            .footer { font-size: 9px; color: #555; border-top: 1px dashed #999; margin-top: 4px; padding-top: 3px; }
-          </style>
-        </head>
-        <body>
-          <div class="org">Embassy of Pakistan, Kuwait</div>
-          <div class="sub">Please keep this token until called</div>
-          <div class="token-num">${t.number}</div>
-          <div class="dept">${DEPARTMENT_NAME}</div>
-          <div class="footer">${new Date(t.created_at).toLocaleString()}</div>
-        </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.onload = () => {
-        printWindow.focus();
-        printWindow.print();
-      };
-    });
   }
 
   async function movePriority(id, direction) {

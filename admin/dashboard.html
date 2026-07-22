@@ -15,6 +15,7 @@
     </div>
     <div class="nav-group-label">Dashboard</div>
     <a class="nav-link" href="dashboard.html"><span>Main-Dashboard</span></a>
+    <a class="nav-link" href="nadra-dashboard.html"><span>NADRA Dashboard</span></a>
     <div class="nav-group-label">Statistics / Settings</div>
     <a class="nav-link" href="statistics.html"><span>Statistics</span></a>
     <a class="nav-link" href="settings.html"><span>Settings</span></a>
@@ -191,18 +192,44 @@ const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
       btn.className = 'btn btn-blue';
       btn.style.width = 'auto';
       btn.style.margin = '0';
-      const displayName = dept.name === 'Welfare Wing' ? 'Welfare Wing Man Power' : dept.name;
-      btn.innerHTML = `🖨️ ${displayName}`;
+      btn.innerHTML = `🖨️ ${dept.name}`;
       btn.onclick = () => createAndPrintWalkin(dept);
       container.appendChild(btn);
     });
   }
 
-  async function createAndPrintWalkin(dept) {
-    const { data: tokenNumber, error: numberError } = await supabaseClient
-      .rpc('get_next_token_number', { dept_id: dept.id, dept_prefix: dept.prefix });
+  const DEPT_PREFIXES = {
+    'NADRA': 'N',
+    'Passport Section': 'P',
+    'Consular section': 'C',
+    'Welfare Wing': 'W',
+    'Special Visit / Other': 'SP'
+  };
 
-    if (numberError) { alert('Could not generate token number.'); console.error(numberError); return; }
+  async function createAndPrintWalkin(dept) {
+    const prefix = DEPT_PREFIXES[dept.name] || dept.name.charAt(0).toUpperCase();
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { data: todaysTokens, error: fetchError } = await supabaseClient
+      .from('tokens')
+      .select('number')
+      .eq('department_id', dept.id)
+      .gte('created_at', todayStart.toISOString());
+
+    if (fetchError) { alert('Could not generate token number.'); console.error(fetchError); return; }
+
+    let maxSeq = 0;
+    (todaysTokens || []).forEach(row => {
+      const match = row.number && row.number.match(new RegExp(`^${prefix}-(\\d+)$`));
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    });
+
+    const tokenNumber = `${prefix}-${String(maxSeq + 1).padStart(3, '0')}`;
 
     const { data, error } = await supabaseClient
       .from('tokens')
@@ -253,8 +280,7 @@ function printToken(id) {
       if (error || !t) { alert('Could not load token to print.'); return; }
 
       const dept = deptMap[t.department_id];
-      const departmentName = dept ? dept.name : 'General';
-      const deptName = departmentName === 'Welfare Wing' ? 'Welfare Wing Man Power' : departmentName;
+      const deptName = dept ? dept.name : 'General';
 
       const printWindow = window.open('', '_blank', 'width=400,height=600');
       if (!printWindow) { alert('Please allow pop-ups to print the token.'); return; }
