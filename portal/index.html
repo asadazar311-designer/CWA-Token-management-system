@@ -80,7 +80,8 @@
           'Special Visit / Other': 'In case you have an appointment with Head of CWA'
         };
 
-        btn.innerHTML = `<div class="name">${dept.name}</div><div class="desc">${descriptions[dept.name] || ''}</div>`;
+        const displayName = dept.name === 'Welfare Wing' ? 'Welfare Wing Man Power' : dept.name;
+        btn.innerHTML = `<div class="name">${displayName}</div><div class="desc">${descriptions[dept.name] || ''}</div>`;
 
         btn.onclick = () => createToken(dept);
         container.appendChild(btn);

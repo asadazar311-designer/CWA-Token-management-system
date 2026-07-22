@@ -40,14 +40,18 @@
     const params = new URLSearchParams(window.location.search);
     const tokenId = params.get('id');
 
+    const departmentName = params.get('dept') || '';
+    const departmentDisplayName = departmentName === 'Welfare Wing'
+      ? 'Welfare Wing Man Power'
+      : departmentName;
     document.getElementById('deptName').textContent =
-      (params.get('dept') || '') + ' token';
+      departmentDisplayName + ' token';
 
     const deskNames = {
       'NADRA': { en: 'NADRA', ur: 'نادرا ڈیسک' },
       'Passport Section': { en: 'Passport', ur: 'پاسپورٹ ڈیسک' },
       'Consular section': { en: 'Consular', ur: 'قونصلر ڈیسک' },
-      'Welfare Wing': { en: 'Welfare', ur: 'ویلفیئر ڈیسک' },
+      'Welfare Wing': { en: 'Welfare Wing Man Power', ur: 'ویلفیئر ڈیسک' },
       'Special Visit / Other': { en: 'Meeting Room', ur: 'میٹنگ روم' }
     };
 

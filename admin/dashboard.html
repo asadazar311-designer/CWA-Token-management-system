@@ -191,7 +191,8 @@ const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
       btn.className = 'btn btn-blue';
       btn.style.width = 'auto';
       btn.style.margin = '0';
-      btn.innerHTML = `🖨️ ${dept.name}`;
+      const displayName = dept.name === 'Welfare Wing' ? 'Welfare Wing Man Power' : dept.name;
+      btn.innerHTML = `🖨️ ${displayName}`;
       btn.onclick = () => createAndPrintWalkin(dept);
       container.appendChild(btn);
     });
@@ -252,7 +253,8 @@ function printToken(id) {
       if (error || !t) { alert('Could not load token to print.'); return; }
 
       const dept = deptMap[t.department_id];
-      const deptName = dept ? dept.name : 'General';
+      const departmentName = dept ? dept.name : 'General';
+      const deptName = departmentName === 'Welfare Wing' ? 'Welfare Wing Man Power' : departmentName;
 
       const printWindow = window.open('', '_blank', 'width=400,height=600');
       if (!printWindow) { alert('Please allow pop-ups to print the token.'); return; }
