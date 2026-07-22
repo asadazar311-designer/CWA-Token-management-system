@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Dashboard</title>
+<title>CWA Dashboard</title>
 <link rel="stylesheet" href="../shared/style.css">
 </head>
 <body>
@@ -11,12 +11,10 @@
   <div class="sidebar" id="sidebar">
     <div class="brand">
       <img src="../shared/logo.jpg">
-      <span>Embassy of Pakistan, Kuwait</span>
+      <span>CWA</span>
     </div>
     <div class="nav-group-label">Dashboard</div>
-    <a class="nav-link" href="dashboard.html"><span>Main-Dashboard</span></a>
-    <a class="nav-link" href="nadra-dashboard.html"><span>NADRA Dashboard</span></a>
-    <a class="nav-link" href="nadra-mobile-dashboard.html"><span>NADRA Mobile Dashboard</span></a>
+    <a class="nav-link" href="dashboard.html"><span>Reception (All Departments)</span></a>
     <a class="nav-link" href="CWA-dashboard.html"><span>CWA Dashboard</span></a>
     <div class="nav-group-label">Statistics / Settings</div>
     <a class="nav-link" href="statistics.html"><span>Statistics</span></a>
@@ -26,17 +24,11 @@
   </div>
 
   <div class="main">
-    <h1 class="page-title">Token Portal </h1>
-    <p class="page-subtitle">Manage tokens taken by clients</p>
+    <h1 class="page-title">Welfare Wing Man Power Token Portal</h1>
+    <p class="page-subtitle">Manage tokens for the Welfare Wing Man Power department only</p>
 
-    <h3 style="margin-bottom:2px;">Token management portal</h3>
-    <p class="sub" style="margin-bottom:20px;">View active statistics and manage the tokens taken by visitors</p>
-
-    <div class="panel" style="margin-bottom:24px;">
-      <h3>Walk-in / No Phone Token</h3>
-      <div class="sub">For visitors without a mobile phone or QR scanner — select a department to generate and print their token</div>
-      <div id="walkinButtons" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px;"></div>
-    </div>
+    <h3 style="margin-bottom:2px;">CWA queue</h3>
+    <p class="sub" style="margin-bottom:20px;">View active statistics and manage Welfare Wing Man Power's tokens only</p>
 
     <div class="stats-row">
       <div class="stat-card"><div class="label">Tokens Pending</div><div class="value" id="statPending">-</div><div class="bar" style="background:#f2994a"></div></div>
@@ -48,8 +40,8 @@
 
     <div class="two-col">
       <div class="panel">
-        <h3>Current Queue List</h3>
-        <div class="sub">Manage the queue list accordingly</div>
+        <h3>CWA Queue List</h3>
+        <div class="sub">Manage the Welfare Wing Man Power queue accordingly</div>
         <table>
           <thead><tr><th>Token#</th><th>Status</th><th>Wait time</th><th>Service time</th><th>Created at</th><th>Actions</th></tr></thead>
           <tbody id="queueBody"></tbody>
@@ -57,8 +49,8 @@
       </div>
 
       <div class="panel">
-        <h3>Current Queue List</h3>
-        <div class="sub">Call, resolve and dismiss currently active token</div>
+        <h3>Current CWA Token</h3>
+        <div class="sub">Call, resolve and dismiss the currently active CWA token</div>
         <div class="current-token-card">
           <h4>Current Token Number</h4>
           <div class="num" id="currentNum">-</div>
@@ -73,7 +65,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/supabase.js"></script>
 <script>
-  let deptMap = {};
+  // This dashboard only ever shows/acts on tokens belonging to this department.
+  const DEPARTMENT_NAME = 'Welfare Wing';
+  let myDeptId = null;
 
   async function checkAuth() {
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -107,12 +101,15 @@
   }
 
   async function loadDashboard() {
-    const { data: departments } = await supabaseClient.from('departments').select('*');
-    deptMap = {};
-    (departments || []).forEach(d => deptMap[d.id] = d);
-    renderWalkinButtons(departments || []);
+    const { data: dept } = await supabaseClient.from('departments').select('*').eq('name', DEPARTMENT_NAME).single();
+    if (!dept) { console.error(`Department "${DEPARTMENT_NAME}" not found.`); return; }
+    myDeptId = dept.id;
 
-    const { data: allTokens } = await supabaseClient.from('tokens').select('*').order('id', { ascending: true });
+    const { data: allTokens } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('department_id', myDeptId)
+      .order('id', { ascending: true });
     if (!allTokens) return;
     const tokens = allTokens.filter(t => !t.archived);
 
@@ -140,8 +137,7 @@
       return new Date(t.resolved_at).getTime() >= mostRecentCallTime;
     });
 
-const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
-
+    const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
 
     const tbody = document.getElementById('queueBody');
     tbody.innerHTML = '';
@@ -183,66 +179,7 @@ const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
       const lastResolved = [...processed, ...dismissed].sort((a, b) => b.id - a.id)[0];
       currentNote.textContent = lastResolved ? `This token has been ${lastResolved.status === 'processed' ? 'Resolved' : 'Dismissed'}` : 'No token is currently being called';
     }
-    actionButtons.innerHTML = `<button class="btn btn-blue" onclick="callNext()">Call Next token</button>`;
-  }
-
-  function renderWalkinButtons(departments) {
-    const container = document.getElementById('walkinButtons');
-    container.innerHTML = '';
-    departments.forEach(dept => {
-      const btn = document.createElement('button');
-      btn.className = 'btn btn-blue';
-      btn.style.width = 'auto';
-      btn.style.margin = '0';
-      btn.innerHTML = `🖨️ ${dept.name}`;
-      btn.onclick = () => createAndPrintWalkin(dept);
-      container.appendChild(btn);
-    });
-  }
-
-  const DEPT_PREFIXES = {
-    'NADRA': 'N',
-    'Passport Section': 'P',
-    'Consular section': 'C',
-    'Welfare Wing': 'W',
-    'Special Visit / Other': 'SP'
-  };
-
-  async function createAndPrintWalkin(dept) {
-    const prefix = DEPT_PREFIXES[dept.name] || dept.name.charAt(0).toUpperCase();
-
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const { data: todaysTokens, error: fetchError } = await supabaseClient
-      .from('tokens')
-      .select('number')
-      .eq('department_id', dept.id)
-      .gte('created_at', todayStart.toISOString());
-
-    if (fetchError) { alert('Could not generate token number.'); console.error(fetchError); return; }
-
-    let maxSeq = 0;
-    (todaysTokens || []).forEach(row => {
-      const match = row.number && row.number.match(new RegExp(`^${prefix}-(\\d+)$`));
-      if (match) {
-        const seq = parseInt(match[1], 10);
-        if (seq > maxSeq) maxSeq = seq;
-      }
-    });
-
-    const tokenNumber = `${prefix}-${String(maxSeq + 1).padStart(3, '0')}`;
-
-    const { data, error } = await supabaseClient
-      .from('tokens')
-      .insert({ number: tokenNumber, department_id: dept.id, status: 'pending' })
-      .select()
-      .single();
-
-    if (error) { alert('Could not create token.'); console.error(error); return; }
-
-    printToken(data.id);
-    loadDashboard();
+    actionButtons.innerHTML = `<button class="btn btn-blue" onclick="callNext()">Call Next CWA token</button>`;
   }
 
   function rowActions(t) {
@@ -251,7 +188,6 @@ const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
         <button class="icon-btn" title="Move up" onclick="movePriority(${t.id}, 'up')">⬆️</button>
         <button class="icon-btn" title="Move down" onclick="movePriority(${t.id}, 'down')">⬇️</button>
         <button class="icon-btn" title="Call" onclick="callToken(${t.id})">📢</button>
-        <button class="icon-btn" title="Print token" onclick="printToken(${t.id})">🖨️</button>
       `;
     }
     if (t.status === 'calling') {
@@ -273,68 +209,12 @@ const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
     return '';
   }
 
- 
-
-// Prints a slip with the token number and department name on it,
-// sized for a narrow thermal/token printer.
-function printToken(id) {
-    supabaseClient.from('tokens').select('*').eq('id', id).single().then(({ data: t, error }) => {
-      if (error || !t) { alert('Could not load token to print.'); return; }
-
-      const dept = deptMap[t.department_id];
-      const deptName = dept ? dept.name : 'General';
-
-      const printWindow = window.open('', '_blank', 'width=400,height=600');
-      if (!printWindow) { alert('Please allow pop-ups to print the token.'); return; }
-
-      printWindow.document.write(`
-        <html>
-        <head>
-          <title>Token ${t.number}</title>
-          <style>
-            /* Thermal token printer - 80mm roll width, short finger-length slip.
-               If your roll is 58mm instead, change both 80mm values below. */
-            @media print {
-              @page { size: 80mm 60mm; margin: 0; }
-            }
-            body {
-              font-family: Arial, sans-serif;
-              width: 80mm;
-              margin: 0;
-              padding: 6px 4px;
-              text-align: center;
-            }
-            .org { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
-            .sub { font-size: 9px; color: #555; margin-bottom: 4px; }
-            .token-num { font-size: 34px; font-weight: 800; margin: 3px 0; letter-spacing: 1px; line-height: 1; }
-            .dept { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
-            .footer { font-size: 9px; color: #555; border-top: 1px dashed #999; margin-top: 4px; padding-top: 3px; }
-          </style>
-        </head>
-        <body>
-          <div class="org">Embassy of Pakistan, Kuwait</div>
-          <div class="sub">Please keep this token until called</div>
-          <div class="token-num">${t.number}</div>
-          <div class="dept">${deptName}</div>
-          <div class="footer">${new Date(t.created_at).toLocaleString()}</div>
-        </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.onload = () => {
-        printWindow.focus();
-        printWindow.print();
-      };
-    });
-}
-
-
-
-async function movePriority(id, direction) {
+  async function movePriority(id, direction) {
     const { data: pendingTokens } = await supabaseClient
       .from('tokens')
       .select('*')
       .eq('status', 'pending')
+      .eq('department_id', myDeptId)
       .order('priority_order', { ascending: true })
       .order('id', { ascending: true });
 
@@ -349,40 +229,37 @@ async function movePriority(id, direction) {
     }
 
     loadDashboard();
-}
+  }
 
+  async function clearStaleTokens() {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
 
-
-async function clearStaleTokens() {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
-  await supabaseClient
-    .from('tokens')
-    .update({ status: 'dismissed', previous_status: 'pending', resolved_at: new Date().toISOString(), archived: true })
-    .in('status', ['pending', 'calling'])
-    .lt('created_at', todayStart.toISOString());
-}
-
-
-
-
-
+    await supabaseClient
+      .from('tokens')
+      .update({ status: 'dismissed', previous_status: 'pending', resolved_at: new Date().toISOString(), archived: true })
+      .in('status', ['pending', 'calling'])
+      .lt('created_at', todayStart.toISOString());
+  }
 
   async function callNext() {
-    const { data: allT } = await supabaseClient.from('tokens').select('*').eq('archived', false);
-    const busyDepartments = new Set(allT.filter(t => t.status === 'calling').map(t => t.department_id));
-
     const { data: pendingTokens } = await supabaseClient
       .from('tokens')
       .select('*')
       .eq('status', 'pending')
+      .eq('department_id', myDeptId)
       .order('priority_order', { ascending: true })
       .order('id', { ascending: true });
 
-    const next = pendingTokens.find(t => !busyDepartments.has(t.department_id));
-    if (!next) { alert('No pending tokens available (or all departments already have an active call).'); return; }
-    await callToken(next.id);
+    const { data: alreadyCalling } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'calling')
+      .eq('department_id', myDeptId);
+
+    if (alreadyCalling && alreadyCalling.length) { alert('A CWA token is already being called.'); return; }
+    if (!pendingTokens || !pendingTokens.length) { alert('No pending CWA tokens available.'); return; }
+    await callToken(pendingTokens[0].id);
   }
 
   async function callToken(id) {
@@ -413,14 +290,12 @@ async function clearStaleTokens() {
     loadDashboard();
   }
 
-supabaseClient
-    .channel('dashboard-tokens')
+  supabaseClient
+    .channel('cwa-dashboard-tokens')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' }, loadDashboard)
     .subscribe();
 
   clearStaleTokens().then(loadDashboard);
-
-  
 </script>
 </body>
 </html>
