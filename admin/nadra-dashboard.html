@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NADRA Dashboard</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<div class="admin-layout">
+  <div class="sidebar" id="sidebar">
+    <div class="brand">
+      <img src="../shared/logo.jpg">
+      <span>NADRA</span>
+    </div>
+    <div class="nav-group-label">Dashboard</div>
+    <a class="nav-link" href="dashboard.html"><span>Reception (All Departments)</span></a>
+    <a class="nav-link" href="nadra-dashboard.html"><span>NADRA Dashboard</span></a>
+    <div class="nav-group-label">Statistics / Settings</div>
+    <a class="nav-link" href="statistics.html"><span>Statistics</span></a>
+    <a class="nav-link" href="settings.html"><span>Settings</span></a>
+    <div style="flex:1"></div>
+    <button onclick="logout()" style="margin-top:20px;border:none;background:none;color:#eb5757;cursor:pointer;text-align:left;">Log out</button>
+  </div>
+
+  <div class="main">
+    <h1 class="page-title">NADRA Token Portal</h1>
+    <p class="page-subtitle">Manage tokens for the NADRA department only</p>
+
+    <h3 style="margin-bottom:2px;">NADRA queue</h3>
+    <p class="sub" style="margin-bottom:20px;">View active statistics and manage NADRA's tokens only</p>
+
+    <div class="panel" style="margin-bottom:24px;">
+      <h3>Walk-in / No Phone Token</h3>
+      <div class="sub">For visitors without a mobile phone or QR scanner — generate and print a NADRA token directly</div>
+      <div id="walkinButtons" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px;"></div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card"><div class="label">Tokens Pending</div><div class="value" id="statPending">-</div><div class="bar" style="background:#f2994a"></div></div>
+      <div class="stat-card"><div class="label">Tokens Served</div><div class="value" id="statServed">-</div><div class="bar" style="background:#27ae60"></div></div>
+      <div class="stat-card"><div class="label">Tokens missed</div><div class="value" id="statMissed">-</div><div class="bar" style="background:#eb5757"></div></div>
+      <div class="stat-card"><div class="label">Avg Wait time</div><div class="value" id="statWait">-</div><div class="bar" style="background:#f2994a"></div></div>
+      <div class="stat-card"><div class="label">Avg Service time</div><div class="value" id="statService">-</div><div class="bar" style="background:#27ae60"></div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h3>NADRA Queue List</h3>
+        <div class="sub">Manage the NADRA queue accordingly</div>
+        <table>
+          <thead><tr><th>Token#</th><th>Status</th><th>Wait time</th><th>Service time</th><th>Created at</th><th>Actions</th></tr></thead>
+          <tbody id="queueBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h3>Current NADRA Token</h3>
+        <div class="sub">Call, resolve and dismiss the currently active NADRA token</div>
+        <div class="current-token-card">
+          <h4>Current Token Number</h4>
+          <div class="num" id="currentNum">-</div>
+          <div class="note" id="currentNote">No token is currently being called</div>
+        </div>
+        <div id="actionButtons"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/supabase.js"></script>
+<script>
+  // This dashboard only ever shows/acts on tokens belonging to this department.
+  const DEPARTMENT_NAME = 'NADRA';
+  let myDeptId = null;
+
+  async function checkAuth() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) window.location.href = 'login.html';
+  }
+  checkAuth();
+
+  function logout() { supabaseClient.auth.signOut().then(() => window.location.href = 'login.html'); }
+
+  function fmtTime(ts) {
+    if (!ts) return '-';
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function fmtDuration(ms) {
+    if (ms == null || ms < 0) return '-';
+    const totalSec = Math.round(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+  }
+
+  function waitTime(t) {
+    if (!t.called_at) return null;
+    return new Date(t.called_at) - new Date(t.created_at);
+  }
+
+  function serviceTime(t) {
+    if (!t.called_at || !t.resolved_at) return null;
+    return new Date(t.resolved_at) - new Date(t.called_at);
+  }
+
+  async function loadDashboard() {
+    const { data: dept } = await supabaseClient.from('departments').select('*').eq('name', DEPARTMENT_NAME).single();
+    if (!dept) { console.error(`Department "${DEPARTMENT_NAME}" not found.`); return; }
+    myDeptId = dept.id;
+    renderWalkinButton();
+
+    const { data: allTokens } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('department_id', myDeptId)
+      .order('id', { ascending: true });
+    if (!allTokens) return;
+    const tokens = allTokens.filter(t => !t.archived);
+
+    const pending = tokens.filter(t => t.status === 'pending').sort((a, b) => (a.priority_order ?? a.id) - (b.priority_order ?? b.id));
+    const calling = tokens.filter(t => t.status === 'calling');
+    const processed = tokens.filter(t => t.status === 'processed');
+    const dismissed = tokens.filter(t => t.status === 'dismissed');
+
+    document.getElementById('statPending').textContent = allTokens.filter(t => t.status === 'pending').length;
+    document.getElementById('statServed').textContent = allTokens.filter(t => t.status === 'processed').length;
+    document.getElementById('statMissed').textContent = allTokens.filter(t => t.status === 'dismissed').length;
+
+    const withWait = allTokens.filter(t => waitTime(t) != null).map(waitTime);
+    const withService = allTokens.filter(t => serviceTime(t) != null).map(serviceTime);
+    const avgWait = withWait.length ? withWait.reduce((a, b) => a + b, 0) / withWait.length : null;
+    const avgService = withService.length ? withService.reduce((a, b) => a + b, 0) / withService.length : null;
+    document.getElementById('statWait').textContent = avgWait != null ? fmtDuration(avgWait) : '-';
+    document.getElementById('statService').textContent = avgService != null ? fmtDuration(avgService) : '-';
+
+    const allCalledTimes = tokens.filter(t => t.called_at).map(t => new Date(t.called_at).getTime());
+    const mostRecentCallTime = allCalledTimes.length ? Math.max(...allCalledTimes) : null;
+
+    const visibleProcessed = processed.filter(t => {
+      if (!mostRecentCallTime || !t.resolved_at) return true;
+      return new Date(t.resolved_at).getTime() >= mostRecentCallTime;
+    });
+
+    const visibleRows = [...calling, ...pending, ...visibleProcessed, ...dismissed];
+
+    const tbody = document.getElementById('queueBody');
+    tbody.innerHTML = '';
+    visibleRows.forEach(t => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${t.number}</td>
+        <td><span class="badge ${t.status}">${t.status}</span></td>
+        <td>${fmtDuration(waitTime(t))}</td>
+        <td>${fmtDuration(serviceTime(t))}</td>
+        <td>${fmtTime(t.created_at)}</td>
+        <td>${rowActions(t)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    const currentNum = document.getElementById('currentNum');
+    const currentNote = document.getElementById('currentNote');
+    const actionButtons = document.getElementById('actionButtons');
+
+    if (calling.length) {
+      currentNum.style.display = 'none';
+      let html = '';
+      calling.forEach(active => {
+        html += `<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.2);">
+          <div style="font-size:36px; font-weight:800;">${active.number}</div>
+          <div style="font-size:13px; opacity:.9; margin-bottom:8px;">This token is currently being called</div>`;
+        if (active.previous_status === 'pending') {
+          html += `<button class="btn btn-blue" onclick="callAgain(${active.id})">Call Again</button>`;
+        }
+        html += `<button class="btn btn-green" onclick="setStatus(${active.id}, 'processed')">Processed</button>`;
+        html += `<button class="btn btn-red" onclick="setStatus(${active.id}, 'dismissed')">Dismiss</button>`;
+        html += `</div>`;
+      });
+      currentNote.innerHTML = html;
+    } else {
+      currentNum.style.display = 'block';
+      currentNum.textContent = '-';
+      const lastResolved = [...processed, ...dismissed].sort((a, b) => b.id - a.id)[0];
+      currentNote.textContent = lastResolved ? `This token has been ${lastResolved.status === 'processed' ? 'Resolved' : 'Dismissed'}` : 'No token is currently being called';
+    }
+    actionButtons.innerHTML = `<button class="btn btn-blue" onclick="callNext()">Call Next NADRA token</button>`;
+  }
+
+  function renderWalkinButton() {
+    const container = document.getElementById('walkinButtons');
+    container.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-blue';
+    btn.style.width = 'auto';
+    btn.style.margin = '0';
+    btn.innerHTML = `🖨️ New NADRA Token`;
+    btn.onclick = () => createAndPrintWalkin();
+    container.appendChild(btn);
+  }
+
+  async function createAndPrintWalkin() {
+    if (!myDeptId) { alert('Department not loaded yet, try again in a moment.'); return; }
+    const prefix = 'N';
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { data: todaysTokens, error: fetchError } = await supabaseClient
+      .from('tokens')
+      .select('number')
+      .eq('department_id', myDeptId)
+      .gte('created_at', todayStart.toISOString());
+
+    if (fetchError) { alert('Could not generate token number.'); console.error(fetchError); return; }
+
+    let maxSeq = 0;
+    (todaysTokens || []).forEach(row => {
+      const match = row.number && row.number.match(new RegExp(`^${prefix}-(\\d+)$`));
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    });
+
+    const tokenNumber = `${prefix}-${String(maxSeq + 1).padStart(3, '0')}`;
+
+    const { data, error } = await supabaseClient
+      .from('tokens')
+      .insert({ number: tokenNumber, department_id: myDeptId, status: 'pending' })
+      .select()
+      .single();
+
+    if (error) { alert('Could not create token.'); console.error(error); return; }
+
+    printToken(data.id);
+    loadDashboard();
+  }
+
+  function rowActions(t) {
+    if (t.status === 'pending') {
+      return `
+        <button class="icon-btn" title="Move up" onclick="movePriority(${t.id}, 'up')">⬆️</button>
+        <button class="icon-btn" title="Move down" onclick="movePriority(${t.id}, 'down')">⬇️</button>
+        <button class="icon-btn" title="Call" onclick="callToken(${t.id})">📢</button>
+        <button class="icon-btn" title="Print token" onclick="printToken(${t.id})">🖨️</button>
+      `;
+    }
+    if (t.status === 'calling') {
+      return `
+        <button class="icon-btn" title="Recall" onclick="callToken(${t.id})">📢</button>
+        <button class="icon-btn" title="Dismiss" onclick="setStatus(${t.id}, 'dismissed')">🚫</button>
+        <button class="icon-btn" title="Processed" onclick="setStatus(${t.id}, 'processed')">✅</button>
+      `;
+    }
+    if (t.status === 'dismissed') {
+      return `
+        <button class="icon-btn" title="Call Again" onclick="callAgain(${t.id})">📢</button>
+        <button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>
+      `;
+    }
+    if (t.status === 'processed') {
+      return `<button class="icon-btn" title="Delete" onclick="deleteToken(${t.id})">🗑️</button>`;
+    }
+    return '';
+  }
+
+  // Prints a slip with the token number and department name on it,
+  // sized for a narrow thermal/token printer.
+  function printToken(id) {
+    supabaseClient.from('tokens').select('*').eq('id', id).single().then(({ data: t, error }) => {
+      if (error || !t) { alert('Could not load token to print.'); return; }
+
+      const printWindow = window.open('', '_blank', 'width=400,height=600');
+      if (!printWindow) { alert('Please allow pop-ups to print the token.'); return; }
+
+      printWindow.document.write(`
+        <html>
+        <head>
+          <title>Token ${t.number}</title>
+          <style>
+            /* Thermal token printer - 80mm roll width, short finger-length slip.
+               If your roll is 58mm instead, change both 80mm values below. */
+            @media print {
+              @page { size: 80mm 60mm; margin: 0; }
+            }
+            body {
+              font-family: Arial, sans-serif;
+              width: 80mm;
+              margin: 0;
+              padding: 6px 4px;
+              text-align: center;
+            }
+            .org { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+            .sub { font-size: 9px; color: #555; margin-bottom: 4px; }
+            .token-num { font-size: 34px; font-weight: 800; margin: 3px 0; letter-spacing: 1px; line-height: 1; }
+            .dept { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+            .footer { font-size: 9px; color: #555; border-top: 1px dashed #999; margin-top: 4px; padding-top: 3px; }
+          </style>
+        </head>
+        <body>
+          <div class="org">Embassy of Pakistan, Kuwait</div>
+          <div class="sub">Please keep this token until called</div>
+          <div class="token-num">${t.number}</div>
+          <div class="dept">${DEPARTMENT_NAME}</div>
+          <div class="footer">${new Date(t.created_at).toLocaleString()}</div>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.focus();
+        printWindow.print();
+      };
+    });
+  }
+
+  async function movePriority(id, direction) {
+    const { data: pendingTokens } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'pending')
+      .eq('department_id', myDeptId)
+      .order('priority_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    const index = pendingTokens.findIndex(t => t.id === id);
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= pendingTokens.length) return;
+
+    [pendingTokens[index], pendingTokens[swapIndex]] = [pendingTokens[swapIndex], pendingTokens[index]];
+
+    for (let i = 0; i < pendingTokens.length; i++) {
+      await supabaseClient.from('tokens').update({ priority_order: i }).eq('id', pendingTokens[i].id);
+    }
+
+    loadDashboard();
+  }
+
+  async function clearStaleTokens() {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    await supabaseClient
+      .from('tokens')
+      .update({ status: 'dismissed', previous_status: 'pending', resolved_at: new Date().toISOString(), archived: true })
+      .in('status', ['pending', 'calling'])
+      .lt('created_at', todayStart.toISOString());
+  }
+
+  async function callNext() {
+    const { data: pendingTokens } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'pending')
+      .eq('department_id', myDeptId)
+      .order('priority_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    const { data: alreadyCalling } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'calling')
+      .eq('department_id', myDeptId);
+
+    if (alreadyCalling && alreadyCalling.length) { alert('A NADRA token is already being called.'); return; }
+    if (!pendingTokens || !pendingTokens.length) { alert('No pending NADRA tokens available.'); return; }
+    await callToken(pendingTokens[0].id);
+  }
+
+  async function callToken(id) {
+    const { data: t } = await supabaseClient.from('tokens').select('*').eq('id', id).single();
+    const update = { status: 'calling', previous_status: t.status };
+    if (!t.called_at) update.called_at = new Date().toISOString();
+    await supabaseClient.from('tokens').update(update).eq('id', id);
+    loadDashboard();
+  }
+
+  async function callAgain(id) {
+    await callToken(id);
+  }
+
+  async function setStatus(id, newStatus) {
+    const { data: t } = await supabaseClient.from('tokens').select('*').eq('id', id).single();
+    await supabaseClient.from('tokens').update({
+      status: newStatus,
+      previous_status: t.status,
+      resolved_at: new Date().toISOString()
+    }).eq('id', id);
+    loadDashboard();
+  }
+
+  async function deleteToken(id) {
+    const { error } = await supabaseClient.from('tokens').update({ archived: true }).eq('id', id);
+    if (error) { alert('Failed: ' + error.message); console.error(error); }
+    loadDashboard();
+  }
+
+  supabaseClient
+    .channel('nadra-dashboard-tokens')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' }, loadDashboard)
+    .subscribe();
+
+  clearStaleTokens().then(loadDashboard);
+</script>
+</body>
+</html>
