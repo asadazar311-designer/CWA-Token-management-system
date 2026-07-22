@@ -30,12 +30,6 @@
     <h3 style="margin-bottom:2px;">NADRA queue</h3>
     <p class="sub" style="margin-bottom:20px;">View active statistics and manage NADRA's tokens only</p>
 
-    <div class="panel" style="margin-bottom:24px;">
-      <h3>Walk-in / No Phone Token</h3>
-      <div class="sub">For visitors without a mobile phone or QR scanner — generate and print a NADRA token directly</div>
-      <div id="walkinButtons" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px;"></div>
-    </div>
-
     <div class="stats-row">
       <div class="stat-card"><div class="label">Tokens Pending</div><div class="value" id="statPending">-</div><div class="bar" style="background:#f2994a"></div></div>
       <div class="stat-card"><div class="label">Tokens Served</div><div class="value" id="statServed">-</div><div class="bar" style="background:#27ae60"></div></div>
@@ -110,7 +104,6 @@
     const { data: dept } = await supabaseClient.from('departments').select('*').eq('name', DEPARTMENT_NAME).single();
     if (!dept) { console.error(`Department "${DEPARTMENT_NAME}" not found.`); return; }
     myDeptId = dept.id;
-    renderWalkinButton();
 
     const { data: allTokens } = await supabaseClient
       .from('tokens')
@@ -187,55 +180,6 @@
       currentNote.textContent = lastResolved ? `This token has been ${lastResolved.status === 'processed' ? 'Resolved' : 'Dismissed'}` : 'No token is currently being called';
     }
     actionButtons.innerHTML = `<button class="btn btn-blue" onclick="callNext()">Call Next NADRA token</button>`;
-  }
-
-  function renderWalkinButton() {
-    const container = document.getElementById('walkinButtons');
-    container.innerHTML = '';
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-blue';
-    btn.style.width = 'auto';
-    btn.style.margin = '0';
-    btn.innerHTML = `➕ New NADRA Token`;
-    btn.onclick = () => createWalkin();
-    container.appendChild(btn);
-  }
-
-  async function createWalkin() {
-    if (!myDeptId) { alert('Department not loaded yet, try again in a moment.'); return; }
-    const prefix = 'N';
-
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const { data: todaysTokens, error: fetchError } = await supabaseClient
-      .from('tokens')
-      .select('number')
-      .eq('department_id', myDeptId)
-      .gte('created_at', todayStart.toISOString());
-
-    if (fetchError) { alert('Could not generate token number.'); console.error(fetchError); return; }
-
-    let maxSeq = 0;
-    (todaysTokens || []).forEach(row => {
-      const match = row.number && row.number.match(new RegExp(`^${prefix}-(\\d+)$`));
-      if (match) {
-        const seq = parseInt(match[1], 10);
-        if (seq > maxSeq) maxSeq = seq;
-      }
-    });
-
-    const tokenNumber = `${prefix}-${String(maxSeq + 1).padStart(3, '0')}`;
-
-    const { data, error } = await supabaseClient
-      .from('tokens')
-      .insert({ number: tokenNumber, department_id: myDeptId, status: 'pending' })
-      .select()
-      .single();
-
-    if (error) { alert('Could not create token.'); console.error(error); return; }
-
-    loadDashboard();
   }
 
   function rowActions(t) {
