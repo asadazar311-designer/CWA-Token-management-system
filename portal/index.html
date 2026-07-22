@@ -19,7 +19,52 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../shared/supabase.js"></script>
   <script>
+    // Remember the customer's current token so they can't grab a second one
+    // by hitting Back and choosing another department.
+    const STORAGE_KEY = 'qms_active_token';
+
+    function getStoredToken() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); }
+      catch { return null; }
+    }
+
+    function setStoredToken(t) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(t)); } catch {}
+    }
+
+    function clearStoredToken() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    }
+
+    // If this browser already has an active token, bounce straight back to it.
+    // Network errors are intentionally ignored: don't punish a brief Supabase
+    // hiccup by clearing localStorage and letting the customer take another.
+    async function resumeActiveToken() {
+      const stored = getStoredToken();
+      if (!stored || !stored.id) return false;
+
+      const { data, error } = await supabaseClient
+        .from('tokens')
+        .select('id, status')
+        .eq('id', stored.id)
+        .single();
+
+      if (error || !data) return false;
+
+      if (data.status === 'pending' || data.status === 'calling') {
+        const dept = encodeURIComponent(stored.dept || '');
+        window.location.replace(`token.html?id=${data.id}&dept=${dept}`);
+        return true;
+      }
+
+      // Confirmed terminal -> forget it so they can take a new one.
+      clearStoredToken();
+      return false;
+    }
+
     async function loadDepartments() {
+      if (await resumeActiveToken()) return;
+
       const { data, error } = await supabaseClient.from('departments').select('*').order('id');
       if (error) { console.error(error); return; }
       const container = document.getElementById('departments');
@@ -27,39 +72,35 @@
         const btn = document.createElement('button');
         btn.className = 'dept-btn';
 
-        
+        const descriptions = {
+          'NADRA': 'For requests regarding ID Card / Information Inquiry',
+          'Passport Section': 'For Passport related issues or passport collection',
+          'Consular section': 'For Attestation, Power of attorney, Affidavits and Visa',
+          'Welfare Wing': 'For OPF Card, Death cases, Out pass, Nurse Requests, Complain Application to Pakistan etc.',
+          'Special Visit / Other': 'In case you have an appointment with Head of CWA'
+        };
 
-const descriptions = {
-  'NADRA': 'For requests regarding ID Card / Information Inquiry',
-  'Passport Section': 'For Passport related issues or passport collection',
-  'Consular section': 'For Attestation, Power of attorney, Affidavits and Visa',
-  'Welfare Wing': 'For OPF Card, Death cases, Out pass, Nurse Requests, Complain Application to Pakistan etc.',
-  'Special Visit / Other': 'In case you have an appointment with Head of CWA'
-};
-
-
-
-btn.innerHTML = `<div class="name">${dept.name}</div><div class="desc">${descriptions[dept.name] || ''}</div>`;
+        btn.innerHTML = `<div class="name">${dept.name}</div><div class="desc">${descriptions[dept.name] || ''}</div>`;
 
         btn.onclick = () => createToken(dept);
         container.appendChild(btn);
       });
     }
 
-   async function createToken(dept) {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
+    async function createToken(dept) {
+      // Lock every button so a double-tap (or impatient clicking) can't fire twice.
+      const buttons = document.querySelectorAll('.dept-btn');
+      buttons.forEach(b => { b.disabled = true; b.style.opacity = '0.6'; });
 
-  
-
-
-const { data: tokenNumber, error: numberError } = await supabaseClient
+      const { data: tokenNumber, error: numberError } = await supabaseClient
         .rpc('get_next_token_number', { dept_id: dept.id, dept_prefix: dept.prefix });
 
-      if (numberError) { alert('Could not generate token number. Try again.'); console.error(numberError); return; }
-
-
-
+      if (numberError) {
+        alert('Could not generate token number. Try again.');
+        console.error(numberError);
+        buttons.forEach(b => { b.disabled = false; b.style.opacity = ''; });
+        return;
+      }
 
       const { data, error } = await supabaseClient
         .from('tokens')
@@ -67,7 +108,15 @@ const { data: tokenNumber, error: numberError } = await supabaseClient
         .select()
         .single();
 
-      if (error) { alert('Could not create token. Try again.'); console.error(error); return; }
+      if (error) {
+        alert('Could not create token. Try again.');
+        console.error(error);
+        buttons.forEach(b => { b.disabled = false; b.style.opacity = ''; });
+        return;
+      }
+
+      // Remember this token so the customer can't grab another by going Back.
+      setStoredToken({ id: data.id, dept: dept.name });
 
       window.location.href = `token.html?id=${data.id}&dept=${encodeURIComponent(dept.name)}`;
     }

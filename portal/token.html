@@ -100,6 +100,12 @@
 
       document.getElementById('tokenNumber').textContent = token.number;
 
+      // Once the token is finished, clear the stored reference so the customer
+      // can take a new one from the portal if they want.
+      if (token.status === 'processed' || token.status === 'dismissed') {
+        try { localStorage.removeItem('qms_active_token'); } catch {}
+      }
+
       const box = document.getElementById('statusBox');
       const label = document.getElementById('statusLabel');
       const note = document.getElementById('statusNote');
