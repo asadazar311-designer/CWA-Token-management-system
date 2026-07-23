@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Book an Appointment</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+  <div class="dark-bg">
+    <div class="card" style="max-width:460px;">
+      <img class="logo" src="../shared/logo.jpg" alt="logo">
+      <div class="title"><span class="green">Pakistan</span> Embassy Kuwait</div>
+      <p class="subtitle">Book an Appointment</p>
+
+      <div id="bookingForm">
+        <label style="display:block; text-align:left; font-weight:600; margin-bottom:6px;">Department</label>
+        <select id="deptSelect" style="width:100%; padding:12px; border-radius:10px; border:1.5px solid var(--border); margin-bottom:16px;">
+          <option value="">Loading departments...</option>
+        </select>
+
+        <label style="display:block; text-align:left; font-weight:600; margin-bottom:6px;">Date</label>
+        <input type="date" id="dateInput" style="width:100%; padding:12px; border-radius:10px; border:1.5px solid var(--border); margin-bottom:16px; box-sizing:border-box;">
+
+        <label style="display:block; text-align:left; font-weight:600; margin-bottom:6px;">Available Time Slots</label>
+        <div id="slotContainer" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+          <span style="color:var(--gray); font-size:14px;">Select a date to see available times</span>
+        </div>
+
+        <label style="display:block; text-align:left; font-weight:600; margin-bottom:6px;">Full Name</label>
+        <input type="text" id="nameInput" placeholder="Enter your full name" style="width:100%; padding:12px; border-radius:10px; border:1.5px solid var(--border); margin-bottom:16px; box-sizing:border-box;">
+
+        <label style="display:block; text-align:left; font-weight:600; margin-bottom:6px;">Phone Number</label>
+        <input type="tel" id="phoneInput" placeholder="+965 XXXX XXXX" style="width:100%; padding:12px; border-radius:10px; border:1.5px solid var(--border); margin-bottom:16px; box-sizing:border-box;">
+
+        <label style="display:block; text-align:left; font-weight:600; margin-bottom:6px;">Reason for Visit</label>
+        <textarea id="reasonInput" placeholder="Briefly describe your reason for visiting" rows="3" style="width:100%; padding:12px; border-radius:10px; border:1.5px solid var(--border); margin-bottom:20px; box-sizing:border-box; font-family:inherit;"></textarea>
+
+        <button class="btn btn-green" onclick="submitBooking()">Confirm Appointment</button>
+        <p id="formError" style="color:#eb5757; font-size:13px; margin-top:10px;"></p>
+      </div>
+
+      <div id="confirmationScreen" style="display:none;">
+        <div class="status-box processed">
+          <div class="status-label">Appointment Confirmed</div>
+          <div class="token-number" id="refNumber">-</div>
+          <div class="status-note" id="confirmDetails"></div>
+        </div>
+        <p style="font-size:13px; color:var(--gray); margin-top:16px;">
+          📸 Please screenshot this page or take a photo. Show this reference at the embassy on your appointment day to check in.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../shared/supabase.js"></script>
+  <script>
+    let departments = [];
+    let selectedSlot = null;
+
+    const SLOT_START_HOUR = 9;
+    const SLOT_END_HOUR = 15;
+    const SLOT_INTERVAL_MIN = 15;
+    const SLOT_CAPACITY = 5;
+
+    async function loadDepartments() {
+      const { data } = await supabaseClient.from('departments').select('*').order('id');
+      departments = data || [];
+      const select = document.getElementById('deptSelect');
+      select.innerHTML = '<option value="">Select a department</option>';
+      departments.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = d.name;
+        select.appendChild(opt);
+      });
+    }
+
+    function generateSlots() {
+      const slots = [];
+      let hour = SLOT_START_HOUR;
+      let min = 0;
+      while (hour < SLOT_END_HOUR || (hour === SLOT_END_HOUR && min === 0)) {
+        const label = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+        slots.push(label);
+        min += SLOT_INTERVAL_MIN;
+        if (min >= 60) { min = 0; hour++; }
+      }
+      return slots;
+    }
+
+    async function loadAvailableSlots() {
+      const date = document.getElementById('dateInput').value;
+      const deptId = document.getElementById('deptSelect').value;
+      const container = document.getElementById('slotContainer');
+
+      if (!date || !deptId) {
+        container.innerHTML = '<span style="color:var(--gray); font-size:14px;">Select a department and date first</span>';
+        return;
+      }
+
+      container.innerHTML = '<span style="color:var(--gray); font-size:14px;">Loading slots...</span>';
+
+      const { data: existing } = await supabaseClient
+        .from('appointments')
+        .select('appointment_time')
+        .eq('department_id', deptId)
+        .eq('appointment_date', date)
+        .neq('status', 'cancelled');
+
+      const counts = {};
+      (existing || []).forEach(a => { counts[a.appointment_time] = (counts[a.appointment_time] || 0) + 1; });
+
+      const allSlots = generateSlots();
+      container.innerHTML = '';
+      selectedSlot = null;
+
+      allSlots.forEach(slot => {
+        const used = counts[slot] || 0;
+        const full = used >= SLOT_CAPACITY;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = slot + (full ? ' (Full)' : '');
+        btn.disabled = full;
+        btn.style.cssText = `padding:8px 12px; border-radius:8px; border:1.5px solid ${full ? '#ccc' : 'var(--green)'}; background:${full ? '#f2f2f2' : '#fff'}; color:${full ? '#999' : 'var(--green)'}; cursor:${full ? 'not-allowed' : 'pointer'}; font-weight:600; font-size:13px;`;
+        btn.onclick = () => selectSlot(slot, btn);
+        container.appendChild(btn);
+      });
+    }
+
+    function selectSlot(slot, btnEl) {
+      selectedSlot = slot;
+      document.querySelectorAll('#slotContainer button').forEach(b => {
+        b.style.background = '#fff';
+        b.style.color = 'var(--green)';
+      });
+      btnEl.style.background = 'var(--green)';
+      btnEl.style.color = '#fff';
+    }
+
+    function generateReference() {
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      return `A-${rand}`;
+    }
+
+    async function submitBooking() {
+      const errorEl = document.getElementById('formError');
+      errorEl.textContent = '';
+
+      const deptId = document.getElementById('deptSelect').value;
+      const date = document.getElementById('dateInput').value;
+      const name = document.getElementById('nameInput').value.trim();
+      const phone = document.getElementById('phoneInput').value.trim();
+      const reason = document.getElementById('reasonInput').value.trim();
+
+      if (!deptId) { errorEl.textContent = 'Please select a department.'; return; }
+      if (!date) { errorEl.textContent = 'Please select a date.'; return; }
+      if (!selectedSlot) { errorEl.textContent = 'Please select a time slot.'; return; }
+      if (!name) { errorEl.textContent = 'Please enter your name.'; return; }
+      if (!phone) { errorEl.textContent = 'Please enter your phone number.'; return; }
+
+      const reference = generateReference();
+
+      const { data, error } = await supabaseClient
+        .from('appointments')
+        .insert({
+          reference,
+          department_id: deptId,
+          appointment_date: date,
+          appointment_time: selectedSlot,
+          visitor_name: name,
+          phone,
+          reason,
+          status: 'booked'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        errorEl.textContent = 'Could not book appointment. Please try again.';
+        console.error(error);
+        return;
+      }
+
+      const dept = departments.find(d => d.id == deptId);
+      document.getElementById('refNumber').textContent = reference;
+      document.getElementById('confirmDetails').innerHTML = `
+        ${dept ? dept.name : ''}<br>
+        ${date} at ${selectedSlot}<br>
+        ${name}
+      `;
+
+      document.getElementById('bookingForm').style.display = 'none';
+      document.getElementById('confirmationScreen').style.display = 'block';
+    }
+
+    document.getElementById('dateInput').addEventListener('change', loadAvailableSlots);
+    document.getElementById('deptSelect').addEventListener('change', loadAvailableSlots);
+
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('dateInput').min = today;
+    document.getElementById('dateInput').value = today;
+
+    loadDepartments().then(loadAvailableSlots);
+  </script>
+</body>
+</html>

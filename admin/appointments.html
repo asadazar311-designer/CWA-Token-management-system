@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Today's Appointments</title>
+<link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+<div class="admin-layout">
+  <div class="sidebar" id="sidebar">
+    <div class="brand">
+      <img src="../shared/logo.jpg">
+      <span>Embassy of Pakistan, Kuwait</span>
+    </div>
+    <div class="nav-group-label">Dashboard</div>
+    <a class="nav-link" href="dashboard.html"><span>Main-Dashboard</span></a>
+    <a class="nav-link" href="appointments.html"><span>Appointments</span></a>
+    <div class="nav-group-label">Statistics / Settings</div>
+    <a class="nav-link" href="statistics.html"><span>Statistics</span></a>
+    <a class="nav-link" href="settings.html"><span>Settings</span></a>
+    <div style="flex:1"></div>
+    <button onclick="logout()" style="margin-top:20px;border:none;background:none;color:#eb5757;cursor:pointer;text-align:left;">Log out</button>
+  </div>
+
+  <div class="main">
+    <h1 class="page-title">Today's Appointments</h1>
+    <p class="page-subtitle">Check in visitors with pre-booked appointments</p>
+
+    <div style="margin-bottom:20px;">
+      <input type="date" id="dateFilter" style="padding:10px 14px; border-radius:10px; border:1.5px solid var(--border);">
+    </div>
+
+    <div class="panel">
+      <table>
+        <thead><tr><th>Reference</th><th>Time</th><th>Department</th><th>Name</th><th>Phone</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="apptBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/supabase.js"></script>
+<script>
+  async function checkAuth() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) window.location.href = 'login.html';
+  }
+  checkAuth();
+
+  function logout() { supabaseClient.auth.signOut().then(() => window.location.href = 'login.html'); }
+
+  let deptMap = {};
+
+  async function loadAppointments() {
+    const date = document.getElementById('dateFilter').value;
+
+    const { data: departments } = await supabaseClient.from('departments').select('*');
+    deptMap = {};
+    (departments || []).forEach(d => deptMap[d.id] = d);
+
+    const { data: appts } = await supabaseClient
+      .from('appointments')
+      .select('*')
+      .eq('appointment_date', date)
+      .order('appointment_time', { ascending: true });
+
+    const tbody = document.getElementById('apptBody');
+    tbody.innerHTML = '';
+
+    (appts || []).forEach(a => {
+      const dept = deptMap[a.department_id];
+      const tr = document.createElement('tr');
+      let statusBadge = '';
+      if (a.status === 'booked') statusBadge = `<span class="badge pending">Booked</span>`;
+      else if (a.status === 'checked_in') statusBadge = `<span class="badge calling">Checked In</span>`;
+      else if (a.status === 'cancelled') statusBadge = `<span class="badge dismissed">Cancelled</span>`;
+
+      const actionBtn = a.status === 'booked'
+        ? `<button class="btn btn-green" style="width:auto; margin:0; padding:8px 14px;" onclick="checkIn(${a.id})">Check In</button>`
+        : (a.status === 'checked_in' ? 'Already checked in' : '-');
+
+      tr.innerHTML = `
+        <td>${a.reference}</td>
+        <td>${a.appointment_time}</td>
+        <td>${dept ? dept.name : '-'}</td>
+        <td>${a.visitor_name}</td>
+        <td>${a.phone}</td>
+        <td>${a.reason || '-'}</td>
+        <td>${statusBadge}</td>
+        <td>${actionBtn}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    if (!appts || !appts.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--gray);">No appointments for this date</td></tr>';
+    }
+  }
+
+  async function checkIn(appointmentId) {
+    const { data: appt, error: apptError } = await supabaseClient
+      .from('appointments')
+      .select('*')
+      .eq('id', appointmentId)
+      .single();
+
+    if (apptError || !appt) { alert('Could not find appointment.'); return; }
+
+    const dept = deptMap[appt.department_id];
+    if (!dept) { alert('Department not found.'); return; }
+
+    const { data: tokenNumber, error: numberError } = await supabaseClient
+      .rpc('get_next_token_number', { dept_id: dept.id, dept_prefix: dept.prefix });
+
+    if (numberError) { alert('Could not generate token number.'); console.error(numberError); return; }
+
+    const { data: newToken, error: tokenError } = await supabaseClient
+      .from('tokens')
+      .insert({
+        number: tokenNumber,
+        department_id: dept.id,
+        status: 'pending',
+        appointment_id: appt.id
+      })
+      .select()
+      .single();
+
+    if (tokenError) { alert('Could not create token.'); console.error(tokenError); return; }
+
+    await supabaseClient
+      .from('appointments')
+      .update({ status: 'checked_in', checked_in_at: new Date().toISOString(), token_id: newToken.id })
+      .eq('id', appointmentId);
+
+    alert(`Checked in! Token ${tokenNumber} has been added to the queue.`);
+    loadAppointments();
+  }
+
+  document.getElementById('dateFilter').addEventListener('change', loadAppointments);
+
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('dateFilter').value = today;
+
+  loadAppointments();
+
+  supabaseClient
+    .channel('appointments-updates')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, loadAppointments)
+    .subscribe();
+</script>
+</body>
+</html>
