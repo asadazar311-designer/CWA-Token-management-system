@@ -279,6 +279,10 @@
 
   function goHome() {
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    // Re-enable every tile — they were disabled the moment a token was
+    // generated to prevent double-taps, but the reset has to clear that
+    // or the home screen comes back looking unresponsive.
+    document.querySelectorAll('.tile').forEach(t => { t.disabled = false; t.classList.remove('disabled'); });
     show('deptScreen');
   }
 

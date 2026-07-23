@@ -2,8 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Statistics</title>
+<title>CWA Statistics</title>
 <link rel="stylesheet" href="../shared/style.css">
 </head>
 <body>
@@ -28,21 +27,40 @@
   </div>
 
   <div class="main">
-    <h1 class="page-title">Token management Portal</h1>
-    <p class="page-subtitle">Embassy of Pakistan, Kuwait</p>
+    <h1 class="page-title">Welfare Wing — CWA Statistics</h1>
+    <p class="page-subtitle">Breakdown of Welfare Wing Man Power tokens by case sub-category</p>
 
     <h3>Welfare Token statistics</h3>
-    <p class="sub">Number of tokens being generated, dismissed, resolved and the avg time it takes to do so</p>
+    <p class="sub">Total Welfare tokens generated, dismissed, resolved and average service times</p>
 
     <div class="stats-row">
-      <div class="stat-card"><div class="label">Total generated</div><div class="value" id="sTotal">-</div><div class="bar" style="background:#2f80ed"></div></div>
+      <div class="stat-card"><div class="label">Total Generated</div><div class="value" id="sTotal">-</div><div class="bar" style="background:#2f80ed"></div></div>
       <div class="stat-card"><div class="label">Tokens Dismissed</div><div class="value" id="sDismissed">-</div><div class="bar" style="background:#eb5757"></div></div>
       <div class="stat-card"><div class="label">Total Processed</div><div class="value" id="sProcessed">-</div><div class="bar" style="background:#27ae60"></div></div>
       <div class="stat-card"><div class="label">Avg. Wait time</div><div class="value" id="sAvgWait">-</div><div class="bar" style="background:#f2994a"></div></div>
       <div class="stat-card"><div class="label">Avg. Process time</div><div class="value" id="sAvgService">-</div><div class="bar" style="background:#27ae60"></div></div>
     </div>
 
-    <h3 style="margin-bottom:2px;">Daily breakdown of Tokens</h3>
+    <h3 style="margin-bottom:2px; margin-top:32px;">Sub-category breakdown</h3>
+    <p class="sub" id="subRangeLabel">Tokens by case type in the last 7 days</p>
+
+    <div class="panel" style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Sub-category</th>
+            <th>Generated</th>
+            <th>Processed</th>
+            <th>Dismissed</th>
+            <th>Avg Wait</th>
+            <th>Avg Service</th>
+          </tr>
+        </thead>
+        <tbody id="subCategoryBody"></tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-bottom:2px; margin-top:32px;">Daily breakdown by sub-category</h3>
     <p class="sub" id="rangeLabel">Last 7 Days - one day per row</p>
 
     <div style="display:flex; gap:12px; margin-bottom:20px;">
@@ -52,9 +70,20 @@
       <button class="range-btn" data-days="90" onclick="setRange(90, this)">90 Days</button>
     </div>
 
-    <div class="panel">
+    <div class="panel" style="overflow-x:auto;">
       <table>
-        <thead><tr><th>Day / Date</th><th>Tokens Generated</th><th>Dismissed</th><th>Resolved</th><th>Avg Wait time</th><th>Avg Service time</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Day / Date</th>
+            <th>OPF</th>
+            <th>Death Case</th>
+            <th>Prisoner</th>
+            <th>Deportation</th>
+            <th>Labour Complaints</th>
+            <th>Application / Request</th>
+            <th>Daily Total</th>
+          </tr>
+        </thead>
         <tbody id="dailyBody"></tbody>
       </table>
     </div>
@@ -67,6 +96,9 @@
     border-radius: 10px; font-weight: 700; cursor: pointer; color: #475467;
   }
   .range-btn.active { background: #2f80ed; color: #fff; border-color: #2f80ed; }
+  th, td { text-align: center; }
+  th:first-child, td:first-child { text-align: left; }
+  th:last-child, td:last-child { font-weight: 800; }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -78,8 +110,17 @@
   }
   checkAuth();
 
+  const SUB_CATEGORIES = [
+    'OPF (Overseas Pakistani Foundation)',
+    'Death Case',
+    'Prisoner',
+    'Deportation',
+    'Labour Complaints',
+    'Application/Request'
+  ];
+
   let currentDays = 7;
-  let allTokens = [];
+  let welfareTokens = [];
 
   function waitTime(t) {
     if (!t.called_at) return null;
@@ -106,12 +147,23 @@
     document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
     btnEl.classList.add('active');
     document.getElementById('rangeLabel').textContent = `Last ${days} Days - one day per row`;
+    document.getElementById('subRangeLabel').textContent = `Tokens by case type in the last ${days} days`;
     render();
   }
 
   async function loadStats() {
-    const { data } = await supabaseClient.from('tokens').select('*');
-    allTokens = data || [];
+    const { data: dept } = await supabaseClient
+      .from('departments')
+      .select('*')
+      .eq('name', 'Welfare Wing')
+      .single();
+    if (!dept) { console.error('Welfare Wing department not found'); return; }
+
+    const { data } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('department_id', dept.id);
+    welfareTokens = data || [];
     render();
   }
 
@@ -121,8 +173,9 @@
     startDate.setDate(startDate.getDate() - (currentDays - 1));
     startDate.setHours(0, 0, 0, 0);
 
-    const inRange = allTokens.filter(t => new Date(t.created_at) >= startDate);
+    const inRange = welfareTokens.filter(t => new Date(t.created_at) >= startDate);
 
+    // Top summary cards
     document.getElementById('sTotal').textContent = inRange.length;
     document.getElementById('sDismissed').textContent = inRange.filter(t => t.status === 'dismissed').length;
     document.getElementById('sProcessed').textContent = inRange.filter(t => t.status === 'processed').length;
@@ -132,8 +185,35 @@
     document.getElementById('sAvgWait').textContent = avgWait != null ? fmtDuration(avgWait) : '-';
     document.getElementById('sAvgService').textContent = avgService != null ? fmtDuration(avgService) : '-';
 
-    const tbody = document.getElementById('dailyBody');
-    tbody.innerHTML = '';
+    // Sub-category summary table — one row per case type.
+    // Includes a "(no sub-category)" row so any legacy Welfare tokens
+    // (taken before the kiosk rollout) still appear.
+    const subBody = document.getElementById('subCategoryBody');
+    subBody.innerHTML = '';
+    const rows = [...SUB_CATEGORIES, null];
+    rows.forEach(sub => {
+      const subTokens = inRange.filter(t => t.sub_category === sub);
+      const generated = subTokens.length;
+      const processed = subTokens.filter(t => t.status === 'processed').length;
+      const dismissed = subTokens.filter(t => t.status === 'dismissed').length;
+      const aWait = avg(subTokens.map(waitTime));
+      const aService = avg(subTokens.map(serviceTime));
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${sub === null ? '<em style="color:var(--gray);">No sub-category (legacy)</em>' : sub}</td>
+        <td>${generated}</td>
+        <td>${processed}</td>
+        <td>${dismissed}</td>
+        <td>${aWait != null ? fmtDuration(aWait) : '-'}</td>
+        <td>${aService != null ? fmtDuration(aService) : '-'}</td>
+      `;
+      subBody.appendChild(tr);
+    });
+
+    // Daily breakdown — one row per day, columns per case type (processed count).
+    const dailyBody = document.getElementById('dailyBody');
+    dailyBody.innerHTML = '';
     for (let i = 0; i < currentDays; i++) {
       const day = new Date(now);
       day.setDate(day.getDate() - i);
@@ -141,27 +221,25 @@
       const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0);
       const dayEnd = new Date(day); dayEnd.setHours(23, 59, 59, 999);
 
-      const dayTokens = allTokens.filter(t => {
+      const dayTokens = welfareTokens.filter(t => {
         const c = new Date(t.created_at);
         return c >= dayStart && c <= dayEnd;
       });
 
-      const dGenerated = dayTokens.length;
-      const dDismissed = dayTokens.filter(t => t.status === 'dismissed').length;
-      const dResolved = dayTokens.filter(t => t.status === 'processed').length;
-      const dAvgWait = avg(dayTokens.map(waitTime));
-      const dAvgService = avg(dayTokens.map(serviceTime));
+      let dailyTotal = 0;
+      const cells = SUB_CATEGORIES.map(sub => {
+        const count = dayTokens.filter(t => t.sub_category === sub && t.status === 'processed').length;
+        dailyTotal += count;
+        return `<td>${count}</td>`;
+      }).join('');
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${dayLabel}</td>
-        <td>${dGenerated}</td>
-        <td>${dDismissed}</td>
-        <td>${dResolved}</td>
-        <td>${dAvgWait != null ? fmtDuration(dAvgWait) : '-'}</td>
-        <td>${dAvgService != null ? fmtDuration(dAvgService) : '-'}</td>
+        ${cells}
+        <td>${dailyTotal}</td>
       `;
-      tbody.appendChild(tr);
+      dailyBody.appendChild(tr);
     }
   }
 
