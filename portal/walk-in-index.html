@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Walk-in Token Kiosk</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: radial-gradient(ellipse at center, var(--green-dark), var(--bg-dark));
+    color: #fff;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+  }
+
+  .kiosk {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+
+  .kiosk-header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .kiosk-header .logo {
+    width: 70px; height: 70px;
+    border-radius: 50%;
+    background: #fff;
+    padding: 4px;
+    margin-bottom: 8px;
+  }
+  .kiosk-header .title {
+    font-size: clamp(22px, 3.4vw, 36px);
+    font-weight: 800;
+    margin: 0;
+  }
+  .kiosk-header .title .green { color: #6bd993; }
+  .kiosk-header .subtitle {
+    color: rgba(255,255,255,0.7);
+    margin: 4px 0 0;
+    font-size: clamp(14px, 1.6vw, 18px);
+  }
+
+  .stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 0;
+  }
+
+  .prompt {
+    text-align: center;
+    font-size: clamp(18px, 2.6vw, 28px);
+    font-weight: 600;
+    margin-bottom: 24px;
+    opacity: 0.95;
+  }
+
+  .grid {
+    display: grid;
+    gap: 18px;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid.cols-3 { grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 900px) {
+    .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .tile {
+    background: #fff;
+    color: #101828;
+    border-radius: 22px;
+    padding: 32px 24px;
+    text-align: center;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    transition: transform .08s ease, box-shadow .08s ease;
+    min-height: 160px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+  }
+  .tile:active {
+    transform: scale(0.97);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  .tile.disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
+  .tile .name {
+    font-size: clamp(22px, 3vw, 32px);
+    font-weight: 800;
+    color: var(--green);
+  }
+  .tile .desc {
+    font-size: clamp(13px, 1.4vw, 16px);
+    color: var(--gray);
+    line-height: 1.3;
+  }
+
+  .back-btn {
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 12px;
+    padding: 12px 22px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 18px;
+    align-self: flex-start;
+  }
+  .back-btn:active { background: rgba(255,255,255,0.2); }
+
+  /* Confirmation */
+  .confirm {
+    text-align: center;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+  .confirm .label {
+    font-size: clamp(20px, 2.6vw, 28px);
+    opacity: .9;
+    margin-bottom: 16px;
+  }
+  .confirm .token {
+    font-size: clamp(80px, 14vw, 180px);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 2px;
+    color: #6bd993;
+    text-shadow: 0 4px 20px rgba(107, 217, 147, 0.3);
+    margin-bottom: 20px;
+  }
+  .confirm .meta {
+    font-size: clamp(16px, 1.8vw, 22px);
+    margin-bottom: 12px;
+    opacity: .9;
+  }
+  .confirm .collect {
+    background: rgba(255,255,255,0.12);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 16px;
+    padding: 18px 24px;
+    margin: 24px auto;
+    max-width: 520px;
+    font-size: clamp(15px, 1.6vw, 18px);
+    line-height: 1.5;
+  }
+  .confirm .countdown {
+    margin-top: 24px;
+    font-size: 14px;
+    opacity: .6;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    width: 64px;
+    height: 64px;
+    border: 6px solid rgba(255,255,255,0.2);
+    border-top-color: #6bd993;
+    border-radius: 50%;
+    margin: 0 auto;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 18px;
+    opacity: .85;
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="kiosk">
+  <div class="kiosk-header">
+    <img class="logo" src="../shared/logo.jpg" alt="logo">
+    <div class="title"><span class="green">Pakistan</span> Embassy Kuwait</div>
+    <div class="subtitle">Walk-in Token Kiosk · Please select your department</div>
+  </div>
+
+  <div class="stage">
+
+    <!-- Step 1: Department selection -->
+    <div id="deptScreen">
+      <div class="prompt">Tap the department you wish to visit</div>
+      <div id="deptGrid" class="grid cols-2"></div>
+    </div>
+
+    <!-- Step 2: Welfare Wing sub-options -->
+    <div id="subScreen" class="hidden">
+      <button class="back-btn" onclick="goHome()">← Back</button>
+      <div class="prompt">Welfare Wing — what is your visit about?</div>
+      <div id="subGrid" class="grid cols-3"></div>
+    </div>
+
+    <!-- Step 3: Loading while token is generated -->
+    <div id="loadingScreen" class="hidden">
+      <div class="spinner"></div>
+      <div class="loading-text">Generating your token…</div>
+    </div>
+
+    <!-- Step 4: Confirmation -->
+    <div id="confirmScreen" class="hidden">
+      <div class="confirm">
+        <div class="label">Your token is</div>
+        <div class="token" id="confirmToken">—</div>
+        <div class="meta" id="confirmMeta"></div>
+        <div class="collect">
+          📄 Please collect your printed slip from the printer next to this kiosk,
+          then wait for your number to be called on the display.
+        </div>
+        <div class="countdown" id="countdown">Returning to home in 10…</div>
+      </div>
+    </div>
+
+    <!-- Error state -->
+    <div id="errorScreen" class="hidden">
+      <div class="confirm">
+        <div class="label">⚠️ Something went wrong</div>
+        <div class="collect" id="errorMsg">Please try again.</div>
+        <button class="back-btn" onclick="goHome()">← Back to start</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/supabase.js"></script>
+<script>
+  // Departments available from the kiosk. Excludes "Special Visit / Other"
+  // since those visitors have a real appointment and shouldn't grab a walk-in.
+  const KIOSK_DEPARTMENTS = ['NADRA', 'Passport Section', 'Consular section', 'Welfare Wing'];
+
+  const DEPT_DESCRIPTIONS = {
+    'NADRA': 'ID Card, Information Inquiry',
+    'Passport Section': 'Passport issues or collection',
+    'Consular section': 'Attestation, Power of attorney, Affidavits, Visa',
+    'Welfare Wing': 'OPF, Death case, Out pass, Complaints'
+  };
+
+  const DEPT_DISPLAY = {
+    'Welfare Wing': 'Welfare Wing Man Power'
+  };
+
+  const WELFARE_SUBS = [
+    { key: 'OPF (Overseas Pakistani Foundation)', label: 'OPF', desc: 'Overseas Pakistani Foundation' },
+    { key: 'Death Case',                          label: 'Death Case',                desc: '' },
+    { key: 'Prisoner',                            label: 'Prisoner',                  desc: '' },
+    { key: 'Deportation',                         label: 'Deportation',               desc: '' },
+    { key: 'Labour Complaints',                   label: 'Labour Complaints',         desc: '' },
+    { key: 'Application/Request',                 label: 'Application / Request',     desc: '' }
+  ];
+
+  let departments = [];
+  let countdownTimer = null;
+
+  function $(id) { return document.getElementById(id); }
+  function show(id) { ['deptScreen','subScreen','loadingScreen','confirmScreen','errorScreen'].forEach(s => $(s).classList.add('hidden')); $(id).classList.remove('hidden'); }
+
+  function goHome() {
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    show('deptScreen');
+  }
+
+  async function loadDepartments() {
+    const { data, error } = await supabaseClient.from('departments').select('*').order('id');
+    if (error) { showError('Could not load departments.'); console.error(error); return; }
+    departments = (data || []).filter(d => KIOSK_DEPARTMENTS.includes(d.name));
+
+    const grid = $('deptGrid');
+    grid.innerHTML = '';
+    departments.forEach(d => {
+      const btn = document.createElement('button');
+      btn.className = 'tile';
+      const name = DEPT_DISPLAY[d.name] || d.name;
+      btn.innerHTML = `<div class="name">${name}</div><div class="desc">${DEPT_DESCRIPTIONS[d.name] || ''}</div>`;
+      if (d.name === 'Welfare Wing') {
+        btn.onclick = () => showWelfareSubs();
+      } else {
+        btn.onclick = () => generateToken(d, null);
+      }
+      grid.appendChild(btn);
+    });
+  }
+
+  function showWelfareSubs() {
+    show('subScreen');
+    const grid = $('subGrid');
+    grid.innerHTML = '';
+    const dept = departments.find(d => d.name === 'Welfare Wing');
+    WELFARE_SUBS.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'tile';
+      btn.innerHTML = `<div class="name">${s.label}</div>${s.desc ? `<div class="desc">${s.desc}</div>` : ''}`;
+      btn.onclick = () => generateToken(dept, s.key);
+      grid.appendChild(btn);
+    });
+  }
+
+  async function generateToken(dept, subCategory) {
+    // Disable every tile so a second tap while we're mid-request can't fire another insert.
+    document.querySelectorAll('.tile').forEach(t => { t.disabled = true; t.classList.add('disabled'); });
+    show('loadingScreen');
+
+    const { data: tokenNumber, error: numberError } = await supabaseClient
+      .rpc('get_next_token_number', { dept_id: dept.id, dept_prefix: dept.prefix });
+
+    if (numberError || !tokenNumber) {
+      console.error(numberError);
+      showError('Could not generate a token number. Please try again.');
+      return;
+    }
+
+    const { data, error } = await supabaseClient
+      .from('tokens')
+      .insert({
+        number: tokenNumber,
+        department_id: dept.id,
+        status: 'pending',
+        sub_category: subCategory,
+        created_via: 'kiosk'
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      console.error(error);
+      showError('Could not save your token. Please try again.');
+      return;
+    }
+
+    // The print relay (running separately on the PC) is subscribed to
+    // Supabase realtime and will see this row's insert event with
+    // created_via = 'kiosk' and print the slip automatically.
+
+    showConfirmation(data, dept, subCategory);
+  }
+
+  function showConfirmation(token, dept, subCategory) {
+    $('confirmToken').textContent = token.number;
+    const deptName = DEPT_DISPLAY[dept.name] || dept.name;
+    $('confirmMeta').textContent = subCategory ? `${deptName} · ${subCategory}` : deptName;
+    show('confirmScreen');
+    startCountdown(10);
+  }
+
+  function startCountdown(seconds) {
+    if (countdownTimer) clearInterval(countdownTimer);
+    let remaining = seconds;
+    $('countdown').textContent = `Returning to home in ${remaining}…`;
+    countdownTimer = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) { clearInterval(countdownTimer); countdownTimer = null; goHome(); return; }
+      $('countdown').textContent = `Returning to home in ${remaining}…`;
+    }, 1000);
+  }
+
+  function showError(msg) {
+    $('errorMsg').textContent = msg;
+    document.querySelectorAll('.tile').forEach(t => { t.disabled = false; t.classList.remove('disabled'); });
+    show('errorScreen');
+  }
+
+  // Tap anywhere on the confirmation screen to go home immediately.
+  $('confirmScreen').addEventListener('click', () => { if (!$('confirmScreen').classList.contains('hidden')) goHome(); });
+
+  loadDepartments();
+</script>
+</body>
+</html>

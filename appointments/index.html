@@ -87,13 +87,14 @@
 
     // Generate slot keys in 24-hour "HH:MM" form so they sort cleanly
     // and the DB column stays consistent with the original schema.
+    // Last slot lands at SLOT_END_HOUR:45 — e.g. 13:45 with END_HOUR=13.
     function generateSlots() {
       const slots = [];
-      for (let h = SLOT_START_HOUR; h <= SLOT_END_HOUR; h++) {
-        for (let m = 0; m < 60; m += SLOT_INTERVAL_MIN) {
-          if (h === SLOT_END_HOUR && m > 0) break;
-          slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-        }
+      const lastMin = SLOT_END_HOUR * 60 + 45;
+      for (let totalMin = SLOT_START_HOUR * 60; totalMin <= lastMin; totalMin += SLOT_INTERVAL_MIN) {
+        const h = Math.floor(totalMin / 60);
+        const m = totalMin % 60;
+        slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
       }
       return slots;
     }
