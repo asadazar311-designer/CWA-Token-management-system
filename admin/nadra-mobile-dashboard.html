@@ -8,47 +8,213 @@
 <style>
   body {
     margin: 0;
+    background: radial-gradient(ellipse at top, var(--green-dark), var(--bg-dark));
+    min-height: 100vh;
+    color: #fff;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+
+  .page {
+    max-width: 520px;
+    margin: 0 auto;
     padding: 16px;
     display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 4px;
+  }
+  .header img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #fff;
+    padding: 2px;
+  }
+  .header .title {
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .header .title .green { color: #6bd993; }
+  .header .meta {
+    font-size: 12px;
+    opacity: .75;
+    margin-top: 2px;
+  }
+
+  .stat-strip {
+    background: #fff;
+    border-radius: 14px;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #101828;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  .stat-strip .label { font-size: 13px; color: var(--gray); font-weight: 600; }
+  .stat-strip .value { font-size: 24px; font-weight: 800; color: var(--pending); }
+
+  .now-serving {
+    background: linear-gradient(135deg, var(--green-light), var(--green-dark));
+    border-radius: 20px;
+    padding: 28px 20px;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
+  .now-serving .label {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: .9;
+    margin-bottom: 8px;
+  }
+  .now-serving .num {
+    font-size: clamp(72px, 22vw, 120px);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 1px;
+    color: #fff;
+  }
+  .now-serving .desk {
+    margin-top: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    opacity: .95;
+  }
+  .now-serving .desk.muted { opacity: .6; font-weight: 500; }
+
+  .action-stack { display: flex; flex-direction: column; gap: 10px; }
+  .action-btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    color: #fff;
+  }
+  .action-btn.blue { background: linear-gradient(135deg, #6bb3f2, #2f80ed); }
+  .action-btn.green { background: var(--processed); }
+  .action-btn.red { background: var(--dismissed); }
+
+  .queue-card {
+    background: #fff;
+    color: #101828;
+    border-radius: 20px;
+    padding: 18px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
+  .queue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+  .queue-header h2 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--green);
+  }
+  .queue-header .count {
+    font-size: 13px;
+    color: var(--gray);
+    font-weight: 600;
+  }
+
+  .queue-list {
+    max-height: 60vh;
+    overflow-y: auto;
+    margin: 0 -8px;
+    padding: 0 8px;
+  }
+  .queue-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 10px;
+    border-radius: 12px;
+    margin-bottom: 6px;
+    background: #f6fbf8;
+    border: 1px solid var(--border);
+  }
+  .queue-row .pos {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--green);
+    min-width: 36px;
+    padding: 4px 6px;
+    background: #e6f7ed;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .queue-row .num {
+    font-size: 20px;
+    font-weight: 800;
+    color: #101828;
+    flex: 1;
+  }
+  .queue-row .arrow-btn {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
     justify-content: center;
   }
-  .mobile-panel {
-    width: 100%;
-    max-width: 480px;
-  }
-  .mobile-panel .stats-row {
-    margin-bottom: 16px;
-  }
-  .mobile-panel .panel {
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .current-token-card .num {
-    font-size: 48px;
-  }
-  #actionButtons .btn,
-  #currentNote .btn {
-    width: 100%;
-    box-sizing: border-box;
-    margin-bottom: 10px;
+  .queue-row .arrow-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  .empty {
     text-align: center;
+    padding: 24px 12px;
+    color: var(--gray);
+    font-size: 14px;
   }
 </style>
 </head>
 <body>
-<div class="mobile-panel">
-  <div class="stats-row">
-    <div class="stat-card"><div class="label">NADRA Tokens Pending</div><div class="value" id="statPending">-</div><div class="bar" style="background:#f2994a"></div></div>
-  </div>
-  <div class="panel">
-    <h3>NADRA Queue</h3>
-    <div class="sub">Call, resolve and dismiss the currently active NADRA token</div>
-    <div class="current-token-card">
-      <h4>Current Token Number</h4>
-      <div class="num" id="currentNum">-</div>
-      <div class="note" id="currentNote">No token is currently being called</div>
+<div class="page">
+  <div class="header">
+    <img src="../shared/logo.jpg" alt="logo">
+    <div>
+      <div class="title">NADRA <span class="green">Portal</span></div>
+      <div class="meta">Reception · <span id="clock">--:--:--</span></div>
     </div>
-    <div id="actionButtons"></div>
+  </div>
+
+  <div class="stat-strip">
+    <div class="label">NADRA Tokens Pending</div>
+    <div class="value" id="statPending">-</div>
+  </div>
+
+  <div class="now-serving">
+    <div class="label">Now Serving</div>
+    <div class="num" id="currentNum">—</div>
+    <div class="desk muted" id="deskLabel">Waiting for next customer</div>
+  </div>
+
+  <div class="action-stack" id="actionStack"></div>
+
+  <div class="queue-card">
+    <div class="queue-header">
+      <h2>NADRA Queue</h2>
+      <div class="count"><span id="queueCount">0</span> in queue</div>
+    </div>
+    <div id="queueList" class="queue-list">
+      <div class="empty">Loading…</div>
+    </div>
   </div>
 </div>
 
@@ -64,6 +230,14 @@
   }
   checkAuth();
 
+  function updateClock() {
+    const d = new Date();
+    const opts = { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+    document.getElementById('clock').textContent = d.toLocaleString([], opts);
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
   async function loadDashboard() {
     const { data: dept } = await supabaseClient.from('departments').select('*').eq('name', DEPARTMENT_NAME).single();
     if (!dept) { console.error(`Department "${DEPARTMENT_NAME}" not found.`); return; }
@@ -77,39 +251,62 @@
     if (!allTokens) return;
     const tokens = allTokens.filter(t => !t.archived);
 
-    document.getElementById('statPending').textContent = allTokens.filter(t => t.status === 'pending').length;
-
+    const pending = tokens
+      .filter(t => t.status === 'pending')
+      .sort((a, b) => (a.priority_order ?? a.id) - (b.priority_order ?? b.id));
     const calling = tokens.filter(t => t.status === 'calling');
     const processed = tokens.filter(t => t.status === 'processed');
     const dismissed = tokens.filter(t => t.status === 'dismissed');
 
+    document.getElementById('statPending').textContent = pending.length;
+
     const currentNum = document.getElementById('currentNum');
-    const currentNote = document.getElementById('currentNote');
-    const actionButtons = document.getElementById('actionButtons');
+    const deskLabel = document.getElementById('deskLabel');
+    const actionStack = document.getElementById('actionStack');
 
     if (calling.length) {
-      currentNum.style.display = 'none';
-      let html = '';
-      calling.forEach(active => {
-        html += `<div style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.2);">
-          <div style="font-size:36px; font-weight:800;">${active.number}</div>
-          <div style="font-size:13px; opacity:.9; margin-bottom:8px;">This token is currently being called</div>`;
-        if (active.previous_status === 'pending') {
-          html += `<button class="btn btn-blue" onclick="callAgain(${active.id})">Call Again</button>`;
-        }
-        html += `<button class="btn btn-green" onclick="setStatus(${active.id}, 'processed')">Processed</button>`;
-        html += `<button class="btn btn-red" onclick="setStatus(${active.id}, 'dismissed')">Dismiss</button>`;
-        html += `</div>`;
-      });
-      currentNote.innerHTML = html;
-      actionButtons.innerHTML = '';
+      const active = calling[0];
+      currentNum.textContent = active.number;
+      deskLabel.textContent = `Proceed to NADRA Desk`;
+      deskLabel.classList.remove('muted');
+
+      let btns = '';
+      if (active.previous_status === 'pending') {
+        btns += `<button class="action-btn blue" onclick="callAgain(${active.id})">Call Again</button>`;
+      }
+      btns += `<button class="action-btn green" onclick="setStatus(${active.id}, 'processed')">Processed</button>`;
+      btns += `<button class="action-btn red" onclick="setStatus(${active.id}, 'dismissed')">Dismiss</button>`;
+      actionStack.innerHTML = btns;
     } else {
-      currentNum.style.display = 'block';
-      currentNum.textContent = '-';
+      currentNum.textContent = '—';
       const lastResolved = [...processed, ...dismissed].sort((a, b) => b.id - a.id)[0];
-      currentNote.textContent = lastResolved ? `This token has been ${lastResolved.status === 'processed' ? 'Resolved' : 'Dismissed'}` : 'No token is currently being called';
-      actionButtons.innerHTML = `<button class="btn btn-blue" onclick="callNext()">Call Next NADRA token</button>`;
+      deskLabel.textContent = lastResolved ? `Last token was ${lastResolved.status === 'processed' ? 'Resolved' : 'Dismissed'}` : 'Waiting for next customer';
+      deskLabel.classList.add('muted');
+      actionStack.innerHTML = `<button class="action-btn blue" onclick="callNext()">Call Next NADRA token</button>`;
     }
+
+    document.getElementById('queueCount').textContent = pending.length;
+
+    const list = document.getElementById('queueList');
+    if (!pending.length) {
+      list.innerHTML = '<div class="empty">NADRA queue is empty</div>';
+      return;
+    }
+
+    let html = '';
+    pending.forEach((p, i) => {
+      const first = i === 0;
+      const last = i === pending.length - 1;
+      html += `
+        <div class="queue-row">
+          <div class="pos">#${i + 1}</div>
+          <div class="num">${p.number}</div>
+          <button class="arrow-btn" title="Move up" ${first ? 'disabled' : ''} onclick="movePriority(${p.id}, 'up')">⬆️</button>
+          <button class="arrow-btn" title="Move down" ${last ? 'disabled' : ''} onclick="movePriority(${p.id}, 'down')">⬇️</button>
+        </div>
+      `;
+    });
+    list.innerHTML = html;
   }
 
   async function clearStaleTokens() {
@@ -121,6 +318,29 @@
       .update({ status: 'dismissed', previous_status: 'pending', resolved_at: new Date().toISOString(), archived: true })
       .in('status', ['pending', 'calling'])
       .lt('created_at', todayStart.toISOString());
+  }
+
+  async function movePriority(id, direction) {
+    const { data: pendingTokens } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'pending')
+      .eq('department_id', myDeptId)
+      .order('priority_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    if (!pendingTokens) return;
+    const index = pendingTokens.findIndex(t => t.id === id);
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= pendingTokens.length) return;
+
+    [pendingTokens[index], pendingTokens[swapIndex]] = [pendingTokens[swapIndex], pendingTokens[index]];
+
+    for (let i = 0; i < pendingTokens.length; i++) {
+      await supabaseClient.from('tokens').update({ priority_order: i }).eq('id', pendingTokens[i].id);
+    }
+
+    loadDashboard();
   }
 
   async function callNext() {
