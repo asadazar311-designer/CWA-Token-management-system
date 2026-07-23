@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reception Display</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  body {
+    margin: 0;
+    background: radial-gradient(ellipse at top, var(--green-dark), var(--bg-dark));
+    min-height: 100vh;
+    color: #fff;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+
+  .page {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 4px;
+  }
+  .header img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #fff;
+    padding: 2px;
+  }
+  .header .title {
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .header .title .green { color: #6bd993; }
+  .header .meta {
+    font-size: 12px;
+    opacity: .75;
+    margin-top: 2px;
+  }
+
+  .now-serving {
+    background: linear-gradient(135deg, var(--green-light), var(--green-dark));
+    border-radius: 20px;
+    padding: 28px 20px;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
+  .now-serving .label {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: .9;
+    margin-bottom: 8px;
+  }
+  .now-serving .num {
+    font-size: clamp(72px, 22vw, 120px);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 1px;
+    color: #fff;
+  }
+  .now-serving .desk {
+    margin-top: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    opacity: .95;
+  }
+  .now-serving .desk.muted { opacity: .6; font-weight: 500; }
+
+  .queue-card {
+    background: #fff;
+    color: #101828;
+    border-radius: 20px;
+    padding: 18px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
+  .queue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+  .queue-header h2 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--green);
+  }
+  .queue-header .count {
+    font-size: 13px;
+    color: var(--gray);
+    font-weight: 600;
+  }
+
+  .queue-list {
+    max-height: 60vh;
+    overflow-y: auto;
+    margin: 0 -8px;
+    padding: 0 8px;
+  }
+  .queue-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 12px;
+    border-radius: 12px;
+    margin-bottom: 6px;
+    background: #f6fbf8;
+    border: 1px solid var(--border);
+  }
+  .queue-row .pos {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--green);
+    min-width: 38px;
+    padding: 4px 8px;
+    background: #e6f7ed;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .queue-row .num {
+    font-size: 22px;
+    font-weight: 800;
+    color: #101828;
+    flex: 1;
+  }
+  .queue-row .dept {
+    font-size: 12px;
+    color: var(--gray);
+    font-weight: 600;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 28px 12px;
+    color: var(--gray);
+    font-size: 14px;
+  }
+
+  .loading {
+    text-align: center;
+    padding: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <img src="../shared/logo.jpg" alt="logo">
+    <div>
+      <div class="title"><span class="green">Pakistan</span> Embassy</div>
+      <div class="meta">Reception · <span id="clock">--:--:--</span></div>
+    </div>
+  </div>
+
+  <div class="now-serving">
+    <div class="label">Now Serving</div>
+    <div class="num" id="currentNum">—</div>
+    <div class="desk muted" id="deskLabel">Waiting for next customer</div>
+  </div>
+
+  <div class="queue-card">
+    <div class="queue-header">
+      <h2>Up Next</h2>
+      <div class="count"><span id="queueCount">0</span> in queue</div>
+    </div>
+    <div id="queueList" class="queue-list">
+      <div class="empty">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/supabase.js"></script>
+<script>
+  const deskNames = {
+    'NADRA': 'NADRA Desk',
+    'Passport Section': 'Passport Desk',
+    'Consular section': 'Consular Desk',
+    'Welfare Wing': 'Welfare Wing Desk',
+    'Special Visit / Other': 'Meeting Room'
+  };
+
+  function updateClock() {
+    const d = new Date();
+    const opts = { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+    document.getElementById('clock').textContent = d.toLocaleString([], opts);
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  async function loadDisplay() {
+    const { data: departments } = await supabaseClient.from('departments').select('*');
+    const deptMap = {};
+    (departments || []).forEach(d => deptMap[d.id] = d);
+
+    const { data: calling } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'calling')
+      .order('priority_order', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(1);
+
+    const { data: pending } = await supabaseClient
+      .from('tokens')
+      .select('*')
+      .eq('status', 'pending')
+      .order('priority_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    const activePending = (pending || []).filter(t => !t.archived);
+
+    const currentNum = document.getElementById('currentNum');
+    const deskLabel = document.getElementById('deskLabel');
+
+    if (calling && calling.length) {
+      const t = calling[0];
+      currentNum.textContent = t.number;
+      const dept = deptMap[t.department_id];
+      if (dept) {
+        deskLabel.textContent = `Proceed to ${deskNames[dept.name] || dept.name}`;
+        deskLabel.classList.remove('muted');
+      } else {
+        deskLabel.textContent = 'Proceed to the desk';
+        deskLabel.classList.remove('muted');
+      }
+    } else {
+      currentNum.textContent = '—';
+      deskLabel.textContent = 'Waiting for next customer';
+      deskLabel.classList.add('muted');
+    }
+
+    document.getElementById('queueCount').textContent = activePending.length;
+
+    const list = document.getElementById('queueList');
+    if (!activePending.length) {
+      list.innerHTML = '<div class="empty">Queue is empty</div>';
+      return;
+    }
+
+    let html = '';
+    activePending.forEach((p, i) => {
+      const dept = deptMap[p.department_id];
+      const deptShort = dept ? (deskNames[dept.name] || dept.name) : '';
+      html += `
+        <div class="queue-row">
+          <div class="pos">#${i + 1}</div>
+          <div class="num">${p.number}</div>
+          <div class="dept">${deptShort}</div>
+        </div>
+      `;
+    });
+    list.innerHTML = html;
+  }
+
+  supabaseClient
+    .channel('mobile-display-tokens')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' }, loadDisplay)
+    .subscribe();
+
+  loadDisplay();
+</script>
+</body>
+</html>
